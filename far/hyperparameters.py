@@ -1,12 +1,5 @@
 import tensorflow as tf
-
-
-class GraphKeys(tf.GraphKeys):
-    """
-    adds HYPERPARAMETERS key
-    """
-
-    HYPERPARAMETERS = 'hyperparameters'
+from far.utils import GraphKeys
 
 
 def get_hyperparameter(name, initializer=None, shape=None, dtype=None):
