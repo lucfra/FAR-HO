@@ -1,6 +1,6 @@
 from tensorflow.python.training import slot_creator
 import tensorflow as tf
-from far import utils
+from far_ho import utils
 
 
 class HyperGradient:
@@ -99,6 +99,10 @@ class ReverseHg(HyperGradient):
 
         # return self._hyper_and_hyper_grad, self._alpha_iter
         # TODO this will not work because of initialization... must find a better way...
+
+    @property
+    def hypers_and_hypergrads(self):
+        return self._hyper_and_hyper_grad
 
     def _create_lagrangian_multipliers(self, doo_ds):
         lag_mul = [slot_creator.create_slot(v, _val_or_zero(v), 'alpha') for ((v, d), der)

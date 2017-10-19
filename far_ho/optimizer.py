@@ -1,5 +1,5 @@
 import tensorflow as tf
-from far.utils import GraphKeys
+from far_ho.utils import GraphKeys
 
 
 class OptimizerDict:
