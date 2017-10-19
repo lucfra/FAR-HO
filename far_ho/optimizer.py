@@ -8,9 +8,16 @@ class OptimizerDict:
         self._ts = ts
         self._dynamics = dynamics
         self.ddyn_dhypers = ddyn_dhypers  # this is used in ForwardHg
-        self._ddyn_dhyper = None
         self._iteration = None
         self._initialization = None
+
+    @property
+    def ts(self):
+        """
+        Descent step, as returned by `tf.train.Optimizer.apply_gradients`.
+        :return:
+        """
+        return self._ts
 
     @property
     def iteration(self):
@@ -48,7 +55,7 @@ class OptimizerDict:
 class Optimizer(tf.train.Optimizer):
     def minimize(self, loss, global_step=None, var_list=None, gate_gradients=tf.train.Optimizer.GATE_OP,
                  aggregation_method=None, colocate_gradients_with_ops=False, name=None, grad_loss=None,
-                 forward_hg=False, hyperparameters=None):
+                 compute_ddyn_dhypers=False, hyperparameters=None):
         """
         Returns a training step operation and the training dynamics in the form of
         list of var_and_dynamics where var are both variables in `var_list` and also additional state (auxiliary)
@@ -64,24 +71,38 @@ class Optimizer(tf.train.Optimizer):
         :param colocate_gradients_with_ops:
         :param name:
         :param grad_loss:
-        :param forward_hg:
+        :param compute_ddyn_dhypers:
         :param hyperparameters:
         :return:
         """
         ts, dyn = super().minimize(loss, global_step, var_list, gate_gradients, aggregation_method,
                                    colocate_gradients_with_ops, name, grad_loss)
-        ddyn_dhypers = None
-        if forward_hg:
-            hypers = hyperparameters or tf.get_collection(GraphKeys.HYPERPARAMETERS)
-            assert all([hy.get_shape().ndims == 1 for hy in hypers]), 'only scalar hyperparameters for now'
-            grad_and_hypers = self.compute_gradients(loss, hypers, gate_gradients, aggregation_method,
-                                                     colocate_gradients_with_ops)
-            # TODO filter for algorithmic hyperparameters (grad would be None here!)
-            ddyn_dhypers = [
-                (tf.gradients(g, hypers, name='d_dyn_d_hypers'), v) for (g, v) in grad_and_hypers
-            ]
-
+        ddyn_dhypers = self._compute_ddyn_dhypers(loss, colocate_gradients_with_ops, aggregation_method,
+                                                  gate_gradients, hyperparameters) if compute_ddyn_dhypers else None
         return OptimizerDict(ts=ts, dynamics=dyn, ddyn_dhypers=ddyn_dhypers)
+
+    def _compute_ddyn_dhypers(self, loss, colocate_gradients_with_ops=None, aggregation_method=None,
+                              gate_gradients=None, hyperparameters=None):
+        hypers = hyperparameters or tf.get_collection(GraphKeys.HYPERPARAMETERS)
+        assert all([hy.get_shape().ndims == 1 for hy in hypers]), 'only scalar hyperparameters for now'
+        grad_and_hypers = self.compute_gradients(loss, hypers, gate_gradients, aggregation_method,
+                                                 colocate_gradients_with_ops)
+        # TODO filter for algorithmic hyperparameters (grad would be None here!)
+        return [
+            (tf.gradients(g, hypers, name='d_dyn_d_hypers'), v) for (g, v) in grad_and_hypers
+        ]
+
+
+# noinspection PyClassHasNoInit,PyAbstractClass
+class GradientDescentOptimizer(Optimizer, tf.train.GradientDescentOptimizer):
+
+    def apply_gradients(self, grads_and_vars, global_step=None, name=None):
+        ts = super().apply_gradients(grads_and_vars, global_step, name)
+        dynamics = []
+        for g, w in grads_and_vars:
+            wk = w - self._learning_rate_tensor * g
+            dynamics += [(w, wk)]
+        return ts, dynamics
 
 
 class MomentumOptimizer(Optimizer, tf.train.MomentumOptimizer):
@@ -107,17 +128,18 @@ class MomentumOptimizer(Optimizer, tf.train.MomentumOptimizer):
         return ts, dynamics
 
 
-class AdamOptimizar(Optimizer, tf.train.AdamOptimizer):
+# noinspection PyClassHasNoInit
+class AdamOptimizer(Optimizer, tf.train.AdamOptimizer):
     def apply_gradients(self, grads_and_vars, global_step=None, name=None):
         # TODO
         return super().apply_gradients(grads_and_vars, global_step, name)
 
     def minimize(self, loss, global_step=None, var_list=None, gate_gradients=tf.train.Optimizer.GATE_OP,
                  aggregation_method=None, colocate_gradients_with_ops=False, name=None, grad_loss=None,
-                 forward_hg=False, hyperparameters=None):
+                 compute_ddyn_dhypers=False, hyperparameters=None):
         # TODO extend OptimizerDict to take into account also
         # self._beta1_power and self._beta2_power
         return super().minimize(loss, global_step, var_list, gate_gradients, aggregation_method,
-                                colocate_gradients_with_ops, name, grad_loss, forward_hg, hyperparameters)
+                                colocate_gradients_with_ops, name, grad_loss, compute_ddyn_dhypers, hyperparameters)
 
 # variables.PartitionedVariable

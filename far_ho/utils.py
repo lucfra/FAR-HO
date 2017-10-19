@@ -39,10 +39,21 @@ def vectorize_all(var_list, name=None):
 
 
 def maybe_call(obj, *args, **kwargs):
-    if callable(obj): return obj(*args, **kwargs)
-    else: return obj
+    if callable(obj):
+        return obj(*args, **kwargs)
+    return obj
 
 
 def dot(a, b, name=None):
     with tf.name_scope(name, 'Dot', [a, b]):
         return tf.reduce_sum(a*b, name=name)
+
+
+def check():
+    print(2)
+
+
+def maybe_eval(a, ss):
+    if hasattr(a, 'eval') or hasattr(a, 'run'):
+        return ss.run(a)
+    return a
