@@ -48,9 +48,12 @@ class HyperGradient:
             aggregation_op = lambda hgrad_list: tf.reduce_mean(hgrad_list, axis=0)
 
         def _aggregate_and_manage_collection(_hg_lst):
-            with tf.name_scope(_hg_lst[0].name.split(':')[0]):
-                aggr = aggregation_op(_hg_lst)
-                tf.add_to_collection( utils.GraphKeys.HYPERGRADIENTS, aggr)
+            if len(_hg_lst) == 1:  # avoid useless operations...
+                aggr = _hg_lst[0]
+            else:
+                with tf.name_scope(_hg_lst[0].name.split(':')[0]):
+                    aggr = aggregation_op(_hg_lst) if len(_hg_lst) > 1 else _hg_lst[0]
+            tf.add_to_collection(utils.GraphKeys.HYPERGRADIENTS, aggr)
             return aggr
 
         return [(_aggregate_and_manage_collection(self._hypergrad_dictionary[h]),
@@ -94,9 +97,10 @@ class ReverseHg(HyperGradient):
         # TODO outer_objective might be a list... handle this case
 
         # iterative computation of hypergradients
-        dlag_dhypers = tf.gradients(lag_part1, hyper_list)
         doo_dypers = tf.gradients(outer_objective, hyper_list)  # (direct) derivative of outer objective w.r.t. hyp.
         hyper_grad_vars = self._create_hypergradient(hyper_list, doo_dypers)
+
+        dlag_dhypers = tf.gradients(lag_part1, hyper_list)
         hyper_grad_step = tf.group(*[hgv.assign(hgv + dl_dh) for hgv, dl_dh in
                                      zip(hyper_grad_vars, dlag_dhypers)])
 

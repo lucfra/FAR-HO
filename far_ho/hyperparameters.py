@@ -1,6 +1,7 @@
 from collections import defaultdict
 
 import tensorflow as tf
+from ordered_set import OrderedSet
 
 from far_ho.optimizer import Optimizer
 from far_ho.hypergradients import ReverseHg, HyperGradient
@@ -19,7 +20,7 @@ class HyperOptimizer:
         self._hypergradient = hypergradient or ReverseHg()
         self._fin_hts = None
         self._global_step = None
-        self._h_optim_dict = defaultdict(lambda: set())
+        self._h_optim_dict = defaultdict(lambda: OrderedSet())
 
     def set_dynamics(self, inner_objective, inner_objective_optimizer, var_list=None, **minimize_kwargs):
         assert isinstance(inner_objective_optimizer, Optimizer)
