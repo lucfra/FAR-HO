@@ -43,12 +43,16 @@ class OptimizerDict:
         return [v for (v, d) in self.dynamics]  # overridden in Adam
 
     def _state_read(self):
-        return [v.read_value() for v in self.state]
+        return [v.read_value() for v in self.state]  # not sure about read_value vs value
 
     def state_feed_dict_generator(self, history):
         state = self.state
         for t, his in enumerate(history):
             yield t, {v: his[k] for k, v in enumerate(state)}
+
+    def __lt__(self, other):  # make OptimizerDict sortable
+        assert isinstance(other, OptimizerDict)
+        return hash(self) < hash(other)
 
 
 # noinspection PyAbstractClass,PyClassHasNoInit

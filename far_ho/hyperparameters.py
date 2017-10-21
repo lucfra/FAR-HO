@@ -1,6 +1,8 @@
+from collections import defaultdict
+
 import tensorflow as tf
 
-from far_ho.optimizer import Optimizer, OptimizerDict
+from far_ho.optimizer import Optimizer
 from far_ho.hypergradients import ReverseHg, HyperGradient
 from far_ho.utils import GraphKeys
 
@@ -12,49 +14,59 @@ def get_hyperparameter(name, initializer=None, shape=None, dtype=None):
 
 
 class HyperOptimizer:
-    def __init__(self, hypergradient_cls=None):
-        assert hypergradient_cls is None or issubclass(hypergradient_cls, HyperGradient)
-        self._hypergradient_cls = hypergradient_cls or ReverseHg
-        self._hypergradient = None
-        # self._optim_dict = None
-        self._hts = []
+    def __init__(self, hypergradient=None):
+        assert hypergradient is None or isinstance(hypergradient, HyperGradient)
+        self._hypergradient = hypergradient or ReverseHg()
         self._fin_hts = None
         self._global_step = None
+        self._h_optim_dict = defaultdict(lambda: set())
 
-    def set_dynamics(self, inner_objective_optimizer, inner_objective, var_list=None,
-                     **minimize_kwargs):
-        # TODO should be possible to call this multiple times for parallel evaluation...
-        # or maybe not really since you can just make a big dynamics if oyu want parallel
-        # execution...
+    def set_dynamics(self, inner_objective, inner_objective_optimizer, var_list=None, **minimize_kwargs):
         assert isinstance(inner_objective_optimizer, Optimizer)
         optim_dict = inner_objective_optimizer.minimize(
             inner_objective,
             var_list=var_list,
-            compute_ddyn_dhypers=self._hypergradient_cls.need_ddyn_dhypers(),
+            compute_ddyn_dhypers=self._hypergradient.need_ddyn_dhypers(),
             **minimize_kwargs
         )
-        self._hypergradient = self._hypergradient_cls(optim_dict)
-        return self
+        return optim_dict
 
-    def set_problem(self, outer_objective_optimizer, outer_objective, hyper_list=None,
-                    global_step=None):  # shout work with multiple calls
-        # (different objective functions for different hyperparameters....)
-        # but must also implement multiple calls of set dynamics (for e.g. mini-batches of episodes)
-
-        self._hypergradient.compute_gradients(outer_objective, hyper_list=hyper_list)
-        #   FIXME I don't think this works with multiple calls
-        ts_or_optim_dict = outer_objective_optimizer.apply_gradients(self._hypergradient.hgrads_hvars(hyper_list))
-        # prev line should be called just once
-        self._hts.append(
-            ts_or_optim_dict.ts if isinstance(ts_or_optim_dict, OptimizerDict) else ts_or_optim_dict
-        )
+    def set_problem(self, outer_objective, optim_dict, outer_objective_optimizer,
+                    hyper_list=None, global_step=None):
+        hyper_list = self._hypergradient.compute_gradients(outer_objective, optim_dict, hyper_list=hyper_list)
+        self._h_optim_dict[outer_objective_optimizer].update(hyper_list)
         self._global_step = global_step
         return self
 
+    def minimize(self, outer_objective, outer_objective_optimizer, inner_objective,  inner_objective_optimizer,
+                 hyper_list=None, var_list=None, global_step=None):
+        optim_dict = self.set_dynamics(inner_objective, inner_objective_optimizer, var_list)
+        self.set_problem(outer_objective, optim_dict, outer_objective_optimizer, hyper_list, global_step)
+        self.finalize()
+        return self.run
+
+    def finalize(self):
+        """
+        To be called when no more dynamics or problems are added, computes the updates
+        for the hyperparameters. This is to behave nicely with global_variables_initializer.
+        :return:
+        """
+        self._hyperit()
+
     @property
+    def hypergradient(self):
+        return self._hypergradient
+
     def _hyperit(self):  # TODO add names
         if self._fin_hts is None:
-            self._fin_hts = tf.group(*self._hts)
+            # in this way also far.optimizer can be used
+            _maybe_first_arg = lambda _v: _v[0] if isinstance(_v, tuple) else _v
+            # apply updates to each optimizer for outer objective minimization.
+            # each optimizer might have more than one group of hyperparameters to optimize
+            # and conversely different hyperparameters might be optimized with different optimizers.
+            self._fin_hts = tf.group(*[_maybe_first_arg(opt.apply_gradients(
+                self.hypergradient.hgrads_hvars(hyper_list=hll)))
+                                       for opt, hll in self._h_optim_dict.items()])
             if self._global_step:
                 with tf.control_dependencies([self._fin_hts]):
                     self._fin_hts = self._global_step.assign_add(1).op
@@ -66,4 +78,4 @@ class HyperOptimizer:
                                 initializer_feed_dict, session=session, global_step=self._global_step)
         if not _skip_hyper_ts:
             ss = session or tf.get_default_session()
-            ss.run(self._hyperit)
+            ss.run(self._hyperit())

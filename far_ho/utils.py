@@ -50,10 +50,29 @@ def dot(a, b, name=None):
 
 
 def check():
-    print(2)
+    print(3)
 
 
 def maybe_eval(a, ss):
     if hasattr(a, 'eval') or hasattr(a, 'run'):
         return ss.run(a)
     return a
+
+
+def remove_from_collection(key, *lst):
+    """
+    Remove tensors in lst from collection given by key
+    :param key:
+    :param lst:
+    :return: None
+    """
+    # noinspection PyProtectedMember
+    [tf.get_default_graph()._collections[key].remove(e) for e in lst]
+
+
+def _maybe_add(a, b):
+    return a if b is None else a + b
+
+
+def val_or_zero(a, b):
+    return a if a is not None else tf.zeros_like(b)
