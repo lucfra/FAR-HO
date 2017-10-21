@@ -1,7 +1,11 @@
 from collections import defaultdict
 
 import tensorflow as tf
-from ordered_set import OrderedSet
+try:
+    from ordered_set import OrderedSet
+except ImportError:
+    print('ordered-set package not found..')
+    OrderedSet = set
 
 from far_ho.optimizer import Optimizer
 from far_ho.hypergradients import ReverseHg, HyperGradient
