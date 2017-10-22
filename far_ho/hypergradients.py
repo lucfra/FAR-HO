@@ -69,10 +69,11 @@ class ReverseHg(HyperGradient):
         self._history = history or []
 
     # noinspection SpellCheckingInspection
-    def compute_gradients(self, outer_objective, optimizer_dict, hyper_list=None):
+    def compute_gradients(self, outer_objective, optimizer_dict, hyper_list=None, device=None):
         """
         Returns variables that store the values of the hypergradients
 
+        :param device:
         :param optimizer_dict:
         :param outer_objective: a loss function for the hyperparameters
         :param hyper_list: list of hyperparameters. If `None`
@@ -87,8 +88,8 @@ class ReverseHg(HyperGradient):
             hyper_list = utils.hyperparameters(scope.name)
 
         # derivative of outer objective w.r.t. state
-        with tf.ops.colocate_with(optimizer_dict.state[0]):  # this should put all the relevant ops in
-            # the right gpu... I presume...
+        with tf.device(device or optimizer_dict.state[0].device):  # set same device as the optimizer
+            # maybe here use `colocate_with`... even tough is not clear the usage of that funciton
             doo_ds = tf.gradients(outer_objective, optimizer_dict.state)
 
             alphas = self._create_lagrangian_multipliers(optimizer_dict, doo_ds)
