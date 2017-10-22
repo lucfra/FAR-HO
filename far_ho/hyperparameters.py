@@ -47,8 +47,7 @@ class HyperOptimizer:
                  hyper_list=None, var_list=None, global_step=None):
         optim_dict = self.set_dynamics(inner_objective, inner_objective_optimizer, var_list)
         self.set_problem(outer_objective, optim_dict, outer_objective_optimizer, hyper_list, global_step)
-        self.finalize()
-        return self.run
+        return self.finalize()
 
     def finalize(self):
         """
@@ -57,6 +56,7 @@ class HyperOptimizer:
         :return:
         """
         self._hyperit()
+        return self.run
 
     @property
     def hypergradient(self):

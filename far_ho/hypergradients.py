@@ -87,34 +87,36 @@ class ReverseHg(HyperGradient):
             hyper_list = utils.hyperparameters(scope.name)
 
         # derivative of outer objective w.r.t. state
-        doo_ds = tf.gradients(outer_objective, optimizer_dict.state)
+        with tf.ops.colocate_with(optimizer_dict.state[0]):  # this should put all the relevant ops in
+            # the right gpu... I presume...
+            doo_ds = tf.gradients(outer_objective, optimizer_dict.state)
 
-        alphas = self._create_lagrangian_multipliers(optimizer_dict, doo_ds)
+            alphas = self._create_lagrangian_multipliers(optimizer_dict, doo_ds)
 
-        alpha_vec = utils.vectorize_all(alphas)
-        dyn_vec = utils.vectorize_all([d for (s, d) in optimizer_dict.dynamics])
-        lag_part1 = utils.dot(alpha_vec, dyn_vec, name='iter_wise_lagrangian_part1')
-        # TODO outer_objective might be a list... handle this case
+            alpha_vec = utils.vectorize_all(alphas)
+            dyn_vec = utils.vectorize_all([d for (s, d) in optimizer_dict.dynamics])
+            lag_part1 = utils.dot(alpha_vec, dyn_vec, name='iter_wise_lagrangian_part1')
+            # TODO outer_objective might be a list... handle this case
 
-        # iterative computation of hypergradients
-        doo_dypers = tf.gradients(outer_objective, hyper_list)  # (direct) derivative of outer objective w.r.t. hyp.
-        hyper_grad_vars = self._create_hypergradient(hyper_list, doo_dypers)
+            # iterative computation of hypergradients
+            doo_dypers = tf.gradients(outer_objective, hyper_list)  # (direct) derivative of outer objective w.r.t. hyp.
+            hyper_grad_vars = self._create_hypergradient(hyper_list, doo_dypers)
 
-        dlag_dhypers = tf.gradients(lag_part1, hyper_list)
-        hyper_grad_step = tf.group(*[hgv.assign(hgv + dl_dh) for hgv, dl_dh in
-                                     zip(hyper_grad_vars, dlag_dhypers)])
+            dlag_dhypers = tf.gradients(lag_part1, hyper_list)
+            hyper_grad_step = tf.group(*[hgv.assign(hgv + dl_dh) for hgv, dl_dh in
+                                         zip(hyper_grad_vars, dlag_dhypers)])
 
-        with tf.control_dependencies([hyper_grad_step]):  # first update hypergradinet then alphas.
-            _alpha_iter = tf.group(*[alpha.assign(dl_ds) for alpha, dl_ds
-                                     in zip(alphas, tf.gradients(lag_part1, optimizer_dict.state))])
-        self._alpha_iter = tf.group(self._alpha_iter, _alpha_iter)
+            with tf.control_dependencies([hyper_grad_step]):  # first update hypergradinet then alphas.
+                _alpha_iter = tf.group(*[alpha.assign(dl_ds) for alpha, dl_ds
+                                         in zip(alphas, tf.gradients(lag_part1, optimizer_dict.state))])
+            self._alpha_iter = tf.group(self._alpha_iter, _alpha_iter)
 
-        [self._hypergrad_dictionary[h].append(hg) for h, hg in zip(hyper_list, hyper_grad_vars)]
+            [self._hypergrad_dictionary[h].append(hg) for h, hg in zip(hyper_list, hyper_grad_vars)]
 
-        self._reverse_initializer = tf.group(self._reverse_initializer,
-                                             tf.variables_initializer(alphas + hyper_grad_vars))
+            self._reverse_initializer = tf.group(self._reverse_initializer,
+                                                 tf.variables_initializer(alphas + hyper_grad_vars))
 
-        return hyper_list
+            return hyper_list
 
     @staticmethod
     def _create_lagrangian_multipliers(optimizer_dict, doo_ds):
