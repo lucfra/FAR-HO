@@ -51,7 +51,7 @@ class HyperGradient:
             if len(_hg_lst) == 1:  # avoid useless operations...
                 aggr = _hg_lst[0]
             else:
-                with tf.name_scope(_hg_lst[0].name.split(':')[0]):
+                with tf.name_scope(_hg_lst[0].op.name):
                     aggr = aggregation_op(_hg_lst) if len(_hg_lst) > 1 else _hg_lst[0]
             tf.add_to_collection(utils.GraphKeys.HYPERGRADIENTS, aggr)
             return aggr
@@ -88,8 +88,7 @@ class ReverseHg(HyperGradient):
             hyper_list = utils.hyperparameters(scope.name)
 
         # derivative of outer objective w.r.t. state
-        with tf.device(device or optimizer_dict.state[0].device):  # set same device as the optimizer
-            # maybe here use `colocate_with`... even tough is not clear the usage of that funciton
+        with tf.variable_scope(outer_objective.op.name):
             doo_ds = tf.gradients(outer_objective, optimizer_dict.state)
 
             alphas = self._create_lagrangian_multipliers(optimizer_dict, doo_ds)
