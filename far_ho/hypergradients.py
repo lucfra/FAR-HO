@@ -69,11 +69,10 @@ class ReverseHg(HyperGradient):
         self._history = history or []
 
     # noinspection SpellCheckingInspection
-    def compute_gradients(self, outer_objective, optimizer_dict, hyper_list=None, device=None):
+    def compute_gradients(self, outer_objective, optimizer_dict, hyper_list=None):
         """
         Returns variables that store the values of the hypergradients
 
-        :param device:
         :param optimizer_dict:
         :param outer_objective: a loss function for the hyperparameters
         :param hyper_list: list of hyperparameters. If `None`
@@ -102,9 +101,9 @@ class ReverseHg(HyperGradient):
             doo_dypers = tf.gradients(outer_objective, hyper_list)  # (direct) derivative of outer objective w.r.t. hyp.
             hyper_grad_vars = self._create_hypergradient(hyper_list, doo_dypers)
 
-            dlag_dhypers = tf.gradients(lag_part1, hyper_list)
+            alpha_dot_B = tf.gradients(lag_part1, hyper_list)
             hyper_grad_step = tf.group(*[hgv.assign(hgv + dl_dh) for hgv, dl_dh in
-                                         zip(hyper_grad_vars, dlag_dhypers)])
+                                         zip(hyper_grad_vars, alpha_dot_B)])
 
             with tf.control_dependencies([hyper_grad_step]):  # first update hypergradinet then alphas.
                 _alpha_iter = tf.group(*[alpha.assign(dl_ds) for alpha, dl_ds
