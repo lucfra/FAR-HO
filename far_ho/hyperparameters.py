@@ -12,10 +12,12 @@ from far_ho.hypergradients import ReverseHg, HyperGradient
 from far_ho.utils import GraphKeys
 
 
+HYPERPARAMETERS_COLLECTIONS = (GraphKeys.HYPERPARAMETERS, GraphKeys.GLOBAL_VARIABLES)
+
+
 def get_hyperparameter(name, initializer=None, shape=None, dtype=None):
     return tf.get_variable(name, shape, dtype, initializer, trainable=False,
-                           collections=[GraphKeys.HYPERPARAMETERS,
-                                        GraphKeys.GLOBAL_VARIABLES])
+                           collections=HYPERPARAMETERS_COLLECTIONS)
 
 
 class HyperOptimizer:
