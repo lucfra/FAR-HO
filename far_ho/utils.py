@@ -76,3 +76,44 @@ def _maybe_add(a, b):
 
 def val_or_zero(a, b):
     return a if a is not None else tf.zeros_like(b)
+
+
+def cross_entropy_loss(labels, logits, linear_input=True, eps=1.e-5, name='cross_entropy_loss'):
+    """
+    Clipped standard-version cross entropy loss. Implemented because  the standard function
+    tf.nn.softmax_cross_entropy_with_logits has wrong (?) Hessian.
+    Clipped because it easily brings to nan otherwise, especially when calculating the Hessian.
+
+    Maybe the code could be optimized since ln(softmax(z_j)) = z_j - prod z_i . Should benchmark it.
+
+    :param labels:
+    :param logits: softmax or linear output of the model
+    :param linear_input: True (default) if y is linear in which case tf.nn.softmax will be applied to y
+    :param eps: (optional, default 1.e-5) clipping value for log.
+    :param name: (optional, default cross_entropy_loss) name scope for the defined operations.
+    :return: tensor for the cross_entropy_loss (WITHOUT MEAN ON THE EXAMPLES)
+    """
+    with tf.name_scope(name):
+        softmax_out = tf.nn.softmax(logits) if linear_input else logits
+        return -tf.reduce_sum(
+            labels * tf.log(tf.clip_by_value(softmax_out, eps, 1. - eps)), reduction_indices=[1]
+        )
+
+
+def binary_cross_entropy(labels, logits, linear_input=True, eps=1.e-5, name='binary_cross_entropy_loss'):
+    """
+    Same as cross_entropy_loss for the binary classification problem. the model should have a one dimensional output,
+    the targets should be given in form of a matrix of dimensions batch_size x 1 with values in [0,1].
+
+    :param labels:
+    :param logits: sigmoid or linear output of the model
+    :param linear_input: (default: True) is y is linear in which case tf.nn.sigmoid will be applied to y
+    :param eps: (optional, default 1.e-5) clipping value for log.
+    :param name: (optional, default binary_cross_entropy_loss) name scope for the defined operations.
+    :return: tensor for the cross_entropy_loss (WITHOUT MEAN ON THE EXAMPLES)
+    """
+    with tf.name_scope(name):
+        sigmoid_out = tf.nn.sigmoid(logits)[:, 0] if linear_input else logits
+        # tgs = targets if len(targets.)
+        return - (labels * tf.log(tf.clip_by_value(sigmoid_out, eps, 1. - eps)) +
+                  (1. - labels) * tf.log(tf.clip_by_value(1. - sigmoid_out, eps, 1. - eps)))
