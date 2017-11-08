@@ -5,23 +5,48 @@ from experiment_manager.utils import *
 # noinspection PyClassHasNoInit
 class GraphKeys(tf.GraphKeys):
     """
-    adds HYPERPARAMETERS key
+    adds some hyperparameters and hypergradients computation related keys
     """
 
     HYPERPARAMETERS = 'hyperparameters'
     LAGRANGIAN_MULTIPLIERS = 'lagrangian_multipliers'
     HYPERGRADIENTS = 'hypergradients'
+    ZS = 'zs'
 
 
 def hyperparameters(scope=None):
+    """
+    List of variables in the collection HYPERPARAMETERS.
+
+    Hyperparameters constructed with `get_hyperparameter` are in this collection by default.
+
+    :param scope: (str) an optional scope.
+    :return: A list of tensors (usually variables)
+    """
     return tf.get_collection(GraphKeys.HYPERPARAMETERS, scope=scope)
 
 
 def lagrangian_multipliers(scope=None):
+    """
+    List of variables in the collection LAGRANGIAN_MULTIPLIERS.
+
+    These variables are created by `far.ReverseHG`.
+
+    :param scope: (str) an optional scope.
+    :return: A list of tensors (usually variables)
+    """
     return tf.get_collection(GraphKeys.LAGRANGIAN_MULTIPLIERS, scope=scope)
 
 
 def hypergradients(scope=None):
+    """
+    List of tensors and/or variables in the collection HYPERGRADIENTS.
+
+    These variables are created by `far.HyperGradient`.
+
+    :param scope: (str) an optional scope.
+    :return: A list of tensors (usually variables)
+    """
     return tf.get_collection(GraphKeys.HYPERGRADIENTS, scope=scope)
 
 
@@ -39,21 +64,36 @@ def vectorize_all(var_list, name=None):
 
 
 def maybe_call(obj, *args, **kwargs):
+    """
+    Calls obj with args and kwargs and return its result if obj is callable, otherwise returns obj.
+    """
     if callable(obj):
         return obj(*args, **kwargs)
     return obj
 
 
 def dot(a, b, name=None):
+    """
+    Dot product between vectors `a` and `b` with optional name
+    """
     with tf.name_scope(name, 'Dot', [a, b]):
         return tf.reduce_sum(a*b, name=name)
 
 
-def check():
+def _check():
     print(3)
 
 
-def maybe_eval(a, ss):
+def maybe_eval(a, ss=None):
+    """
+    Run or eval `a` and returns the result if possible.
+
+    :param a: object, or `tf.Variable` or `tf.Tensor`
+    :param ss: `tf.Session` or get default session (if any)
+    :return: If a is not a tensorflow evaluable returns it, or returns the
+                resulting call
+    """
+    if ss is None: ss = tf.get_default_session()
     if hasattr(a, 'eval') or hasattr(a, 'run'):
         return ss.run(a)
     return a
@@ -62,19 +102,22 @@ def maybe_eval(a, ss):
 def remove_from_collection(key, *lst):
     """
     Remove tensors in lst from collection given by key
-    :param key:
-    :param lst:
-    :return: None
     """
     # noinspection PyProtectedMember
     [tf.get_default_graph()._collections[key].remove(e) for e in lst]
 
 
 def _maybe_add(a, b):
+    """
+    return a if b is None else a + b
+    """
     return a if b is None else a + b
 
 
 def val_or_zero(a, b):
+    """
+    return a if a is not None else tf.zeros_like(b)
+    """
     return a if a is not None else tf.zeros_like(b)
 
 
@@ -117,3 +160,6 @@ def binary_cross_entropy(labels, logits, linear_input=True, eps=1.e-5, name='bin
         # tgs = targets if len(targets.)
         return - (labels * tf.log(tf.clip_by_value(sigmoid_out, eps, 1. - eps)) +
                   (1. - labels) * tf.log(tf.clip_by_value(1. - sigmoid_out, eps, 1. - eps)))
+
+
+# TODO put some other useful errors (with mean and so on) and scores, and add them to correct collections...
