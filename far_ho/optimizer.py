@@ -1,5 +1,5 @@
 import tensorflow as tf
-from far_ho.utils import GraphKeys
+from collections import OrderedDict
 
 
 class OptimizerDict:
@@ -10,6 +10,7 @@ class OptimizerDict:
         self.ddyn_dhypers = ddyn_dhypers  # this is used in ForwardHg
         self._iteration = None
         self._initialization = None
+        self._init_dyn = None  # for phi_0 (will be a dictionary (state-variable, phi_0 op)
 
     @property
     def ts(self):
@@ -31,7 +32,13 @@ class OptimizerDict:
     def initialization(self):
         if self._initialization is None:
             with tf.control_dependencies([tf.variables_initializer(self.state)]):
-                self._initialization = self._state_read()  # initialize state variables and return the initialized value
+                if self._init_dyn is not None:  # create assign operation for initialization
+                    self._initialization = [k.assign(v) for k, v in self._init_dyn.items()]
+                    # return these new initialized values (and ignore variable initializers)
+                else:
+                    self._initialization = self._state_read()  # initialize state variables and
+                    # return the initialized value
+
         return self._initialization
 
     @property
@@ -50,6 +57,22 @@ class OptimizerDict:
         for t, his in enumerate(history):
             yield t, {v: his[k] for k, v in enumerate(state)}
 
+    def set_init_dynamics(self, init_dictionary):
+        """
+
+        :param init_dictionary:
+        :return:
+        """
+        if self._init_dyn is None:
+            self._init_dyn = OrderedDict([(v, tf.identity(v)) for v in self.state])  # do nothing
+        for k, v in init_dictionary.items():
+            assert k in self._init_dyn, 'Can set initial operation only for state variables in this object, got %s' % k
+            self._init_dyn[k] = v
+
+    @property
+    def init_dynamics(self):
+        return None if self._init_dyn is None else self._init_dyn.items()
+
     def __lt__(self, other):  # make OptimizerDict sortable
         assert isinstance(other, OptimizerDict)
         return hash(self) < hash(other)
@@ -58,8 +81,8 @@ class OptimizerDict:
 # noinspection PyAbstractClass,PyClassHasNoInit
 class Optimizer(tf.train.Optimizer):
     def minimize(self, loss, global_step=None, var_list=None, gate_gradients=tf.train.Optimizer.GATE_OP,
-                 aggregation_method=None, colocate_gradients_with_ops=False, name=None, grad_loss=None,
-                 compute_ddyn_dhypers=False, hyperparameters=None):
+                 aggregation_method=None, colocate_gradients_with_ops=False, name=None, grad_loss=None):
+                 # compute_ddyn_dhypers=False, hyperparameters=None):
         """
         Returns a training step operation and the training dynamics in the form of
         list of var_and_dynamics where var are both variables in `var_list` and also additional state (auxiliary)
@@ -81,20 +104,21 @@ class Optimizer(tf.train.Optimizer):
         """
         ts, dyn = super().minimize(loss, global_step, var_list, gate_gradients, aggregation_method,
                                    colocate_gradients_with_ops, name, grad_loss)
-        ddyn_dhypers = self._compute_ddyn_dhypers(loss, colocate_gradients_with_ops, aggregation_method,
-                                                  gate_gradients, hyperparameters) if compute_ddyn_dhypers else None
-        return OptimizerDict(ts=ts, dynamics=dyn, ddyn_dhypers=ddyn_dhypers)
+        # ddyn_dhypers = self._compute_ddyn_dhypers(loss, colocate_gradients_with_ops, aggregation_method,
+        #                                           gate_gradients, hyperparameters) if compute_ddyn_dhypers else None
+        return OptimizerDict(ts=ts, dynamics=dyn)
+                 # ddyn_dhypers=ddyn_dhypers)
 
-    def _compute_ddyn_dhypers(self, loss, colocate_gradients_with_ops=None, aggregation_method=None,
-                              gate_gradients=None, hyperparameters=None):
-        hypers = hyperparameters or tf.get_collection(GraphKeys.HYPERPARAMETERS)
-        assert all([hy.get_shape().ndims == 1 for hy in hypers]), 'only scalar hyperparameters for now'
-        grad_and_hypers = self.compute_gradients(loss, hypers, gate_gradients, aggregation_method,
-                                                 colocate_gradients_with_ops)
-        # TODO filter for algorithmic hyperparameters (grad would be None here!)
-        return [
-            (tf.gradients(g, hypers, name='d_dyn_d_hypers'), v) for (g, v) in grad_and_hypers
-        ]
+    # def _compute_ddyn_dhypers(self, loss, colocate_gradients_with_ops=None, aggregation_method=None,
+    #                           gate_gradients=None, hyperparameters=None):
+    #     hypers = hyperparameters or tf.get_collection(GraphKeys.HYPERPARAMETERS)
+    #     assert all([hy.get_shape().ndims == 1 for hy in hypers]), 'only scalar hyperparameters for now'
+    #     grad_and_hypers = self.compute_gradients(loss, hypers, gate_gradients, aggregation_method,
+    #                                              colocate_gradients_with_ops)
+    #     # TODO filter for algorithmic hyperparameters (grad would be None here!)
+    #     return [
+    #         (tf.gradients(g, hypers, name='d_dyn_d_hypers'), v) for (g, v) in grad_and_hypers
+    #     ]
 
 
 # noinspection PyClassHasNoInit,PyAbstractClass
@@ -139,11 +163,12 @@ class AdamOptimizer(Optimizer, tf.train.AdamOptimizer):
         return super().apply_gradients(grads_and_vars, global_step, name)
 
     def minimize(self, loss, global_step=None, var_list=None, gate_gradients=tf.train.Optimizer.GATE_OP,
-                 aggregation_method=None, colocate_gradients_with_ops=False, name=None, grad_loss=None,
-                 compute_ddyn_dhypers=False, hyperparameters=None):
+                 aggregation_method=None, colocate_gradients_with_ops=False, name=None, grad_loss=None):
+                 # compute_ddyn_dhypers=False, hyperparameters=None):
         # TODO extend OptimizerDict to take into account also
         # self._beta1_power and self._beta2_power
         return super().minimize(loss, global_step, var_list, gate_gradients, aggregation_method,
-                                colocate_gradients_with_ops, name, grad_loss, compute_ddyn_dhypers, hyperparameters)
+                                colocate_gradients_with_ops, name, grad_loss)
+                 # , compute_ddyn_dhypers, hyperparameters)
 
 # variables.PartitionedVariable
