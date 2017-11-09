@@ -38,7 +38,7 @@ class HyperGradient:
         return utils.flatten_list([opt_dict.iteration for opt_dict in sorted(self._optimizer_dicts)])
 
     def run(self, T_or_generator, inner_objective_feed_dicts=None, outer_objective_feed_dicts=None,
-            initializer_feed_dict=None, global_step=None, session=None):
+            initializer_feed_dict=None, global_step=None, session=None, online=False):
         raise NotImplementedError()
 
     def hgrads_hvars(self, aggregation_op=None, hyper_list=None):
@@ -64,7 +64,6 @@ class HyperGradient:
 
 
 class ReverseHg(HyperGradient):
-
     def __init__(self, history=None):
         super().__init__()
         self._alpha_iter = tf.no_op()
@@ -102,7 +101,7 @@ class ReverseHg(HyperGradient):
                 lag_phi0 = utils.dot(alpha_vec, utils.vectorize_all([d for (s, d) in optimizer_dict.init_dynamics]))
                 alpha_dot_B0 = tf.gradients(lag_phi0, hyper_list)
             else:
-                alpha_dot_B0 = [None]*len(hyper_list)
+                alpha_dot_B0 = [None] * len(hyper_list)
 
             # here is some of this is None it may mean that the hyperparameter compares inside phi_0: check that and
             # if it is not the case return error...
@@ -163,12 +162,14 @@ class ReverseHg(HyperGradient):
             yield t, {v: his[k] for k, v in enumerate(state)}
 
     def run(self, T_or_generator, inner_objective_feed_dicts=None, outer_objective_feed_dicts=None,
-            initializer_feed_dict=None, global_step=None, session=None):
+            initializer_feed_dict=None, global_step=None, session=None, online=False):
 
         ss = session or tf.get_default_session()
 
         self._history.clear()
-        self._history.append(ss.run(self.initialization, feed_dict=initializer_feed_dict))
+        if not online:
+            self._history.append(ss.run(self.initialization, feed_dict=utils.maybe_call(
+                initializer_feed_dict, utils.maybe_eval(global_step, ss))))
 
         for t in range(T_or_generator) if isinstance(T_or_generator, int) else T_or_generator:
             self._history.append(ss.run(self.iteration,
@@ -178,11 +179,13 @@ class ReverseHg(HyperGradient):
         ss.run(self._reverse_initializer, feed_dict=utils.maybe_call(outer_objective_feed_dicts,
                                                                      utils.maybe_eval(global_step, ss)))
         for pt, state_feed_dict in self._state_feed_dict_generator(reversed(self._history[:-1])):
+            # this should be fine also for truncated reverse... but check again the index t
             t = len(self._history) - pt - 2  # if T is int then len(self.history) is T + 1 and this numerator
             # shall start at T-1  (99.99 sure its correct)
-            ss.run(self._alpha_iter, feed_dict=utils.merge_dicts(
-                state_feed_dict,
-                utils.maybe_call(inner_objective_feed_dicts, t) if inner_objective_feed_dicts else {}))
+            ss.run(self._alpha_iter,
+                   feed_dict=utils.merge_dicts(state_feed_dict,
+                                               utils.maybe_call(inner_objective_feed_dicts, t)
+                                               if inner_objective_feed_dicts else {}))
 
 
 class ForwardHG(HyperGradient):
@@ -206,5 +209,5 @@ class ForwardHG(HyperGradient):
     #     return lag_mul
 
     def run(self, T_or_generator, inner_objective_feed_dicts=None, outer_objective_feed_dicts=None,
-            initializer_feed_dict=None, global_step=None, session=None):
+            initializer_feed_dict=None, global_step=None, session=None, online=False):
         pass

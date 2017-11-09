@@ -42,7 +42,8 @@ class HyperOptimizer:
         self._global_step = None
         self._h_optim_dict = defaultdict(lambda: OrderedSet())
 
-    def set_dynamics(self, inner_objective, inner_objective_optimizer, var_list=None, **minimize_kwargs):
+    def set_dynamics(self, inner_objective, inner_objective_optimizer, var_list=None, init_dynamics_dict=None,
+                     **minimize_kwargs):
         """
         Set the dynamics Phi: a descent procedure on some inner_objective, can be called multiple times, for instance
         for batching inner optimization problems.
@@ -51,6 +52,7 @@ class HyperOptimizer:
         :param inner_objective_optimizer: an instance of some `far.Optimizer` (optimizers from Tensorflow must be
                                             extended to include tensors for the dynamics)
         :param var_list: optional list of variables (of the inner optimization problem)
+        :param init_dynamics_dict: optional dictrionary that defines Phi_0 (see `OptimizerDict.set_init_dynamics`)
         :param minimize_kwargs: optional arguments to pass to `optimizer.minimize`
         :return: `OptimizerDict` from optimizer.
         """
@@ -60,6 +62,8 @@ class HyperOptimizer:
             var_list=var_list,
             **minimize_kwargs
         )
+        if init_dynamics_dict:
+            optim_dict.set_init_dynamics(init_dynamics_dict)
         return optim_dict
 
     def set_problem(self, outer_objective, optim_dict, outer_objective_optimizer,
@@ -82,10 +86,12 @@ class HyperOptimizer:
         return self
 
     def minimize(self, outer_objective, outer_objective_optimizer, inner_objective, inner_objective_optimizer,
-                 hyper_list=None, var_list=None, global_step=None):
+                 hyper_list=None, var_list=None, init_dynamics_dict=None, global_step=None):
         """
-        Single function for calling once `set_dynamics` and `set_problem`. Returns
+        Single function for calling once `set_dynamics` and `set_problem`. Returns method run, that runs one
+        hyperiteration.
 
+        :param init_dynamics_dict:
         :param outer_objective:
         :param outer_objective_optimizer:
         :param inner_objective:
@@ -95,7 +101,7 @@ class HyperOptimizer:
         :param global_step:
         :return:
         """
-        optim_dict = self.set_dynamics(inner_objective, inner_objective_optimizer, var_list)
+        optim_dict = self.set_dynamics(inner_objective, inner_objective_optimizer, var_list, init_dynamics_dict)
         self.set_problem(outer_objective, optim_dict, outer_objective_optimizer, hyper_list, global_step)
         return self.finalize()
 
@@ -136,7 +142,7 @@ class HyperOptimizer:
         return self._fin_hts
 
     def run(self, T_or_generator, inner_objective_feed_dicts=None, outer_objective_feed_dicts=None,
-            initializer_feed_dict=None, session=None, _skip_hyper_ts=False):
+            initializer_feed_dict=None, session=None, online=False, _skip_hyper_ts=False):
         """
         Run an hyper-iteration (i.e. train the model(s) and compute hypergradients) and updates the hyperparameters.
 
@@ -153,12 +159,15 @@ class HyperOptimizer:
                                             hyper-iterations steps (i.e. global variable), which may account for, e.g.
                                             stochastic initialization.
         :param session: optional session
+        :param online: default `False` if `True` performs the online version of the algorithms (i.e. does not
+                            reinitialize the state after at each run).
         :param _skip_hyper_ts: if `True` does not perform hyperparameter optimization step.
         """
         self._hypergradient.run(T_or_generator, inner_objective_feed_dicts,
-                                maybe_call(outer_objective_feed_dicts, maybe_eval(self._global_step)),
-                                maybe_call(initializer_feed_dict, maybe_eval(self._global_step)),
-                                session=session, global_step=self._global_step)
+                                outer_objective_feed_dicts,
+                                initializer_feed_dict,
+                                session=session,
+                                online=online, global_step=self._global_step)
         if not _skip_hyper_ts:
             ss = session or tf.get_default_session()
             ss.run(self._hyperit())
