@@ -4,10 +4,9 @@ from collections import OrderedDict
 
 class OptimizerDict:
 
-    def __init__(self, ts, dynamics, ddyn_dhypers=None):
+    def __init__(self, ts, dynamics):
         self._ts = ts
         self._dynamics = dynamics
-        self.ddyn_dhypers = ddyn_dhypers  # this is used in ForwardHg
         self._iteration = None
         self._initialization = None
         self._init_dyn = None  # for phi_0 (will be a dictionary (state-variable, phi_0 op)
