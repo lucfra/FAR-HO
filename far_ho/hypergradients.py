@@ -39,7 +39,7 @@ class HyperGradient:
 
     @property
     def ts(self):
-        return utils.flatten_list([opt_dict.ts for opt_dict in sorted(self._optimizer_dicts)])
+        return tf.group(*[opt_dict.ts for opt_dict in sorted(self._optimizer_dicts)])
 
     def run(self, T_or_generator, inner_objective_feed_dicts=None, outer_objective_feed_dicts=None,
             initializer_feed_dict=None, global_step=None, session=None, online=False):
