@@ -37,6 +37,10 @@ class HyperGradient:
     def iteration(self):
         return utils.flatten_list([opt_dict.iteration for opt_dict in sorted(self._optimizer_dicts)])
 
+    @property
+    def ts(self):
+        return utils.flatten_list([opt_dict.ts for opt_dict in sorted(self._optimizer_dicts)])
+
     def run(self, T_or_generator, inner_objective_feed_dicts=None, outer_objective_feed_dicts=None,
             initializer_feed_dict=None, global_step=None, session=None, online=False):
         raise NotImplementedError()
@@ -186,6 +190,14 @@ class ReverseHg(HyperGradient):
                    feed_dict=utils.merge_dicts(state_feed_dict,
                                                utils.maybe_call(inner_objective_feed_dicts, t)
                                                if inner_objective_feed_dicts else {}))
+
+
+class UnrolledReverseHG(HyperGradient):
+    def run(self, T_or_generator, inner_objective_feed_dicts=None, outer_objective_feed_dicts=None,
+            initializer_feed_dict=None, global_step=None, session=None, online=False):
+        return NotImplemented()
+
+    # def
 
 
 class ForwardHG(HyperGradient):
