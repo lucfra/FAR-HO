@@ -169,4 +169,4 @@ class HyperOptimizer:
                                 online=online, global_step=self._global_step)
         if not _skip_hyper_ts:
             ss = session or tf.get_default_session()
-            ss.run(self._hyperit())
+            ss.run(self._hyperit)

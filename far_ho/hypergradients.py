@@ -109,7 +109,8 @@ class ReverseHg(HyperGradient):
         hyper_list = super().compute_gradients(outer_objective, optimizer_dict, hyper_list)
 
         # derivative of outer objective w.r.t. state
-        with tf.variable_scope(outer_objective.op.name):
+        with tf.variable_scope(outer_objective.op.name):  # FIXME for some reason without this there is a cathastrofic
+            # failure...
             doo_ds = tf.gradients(outer_objective, optimizer_dict.state)
 
             alphas = self._create_lagrangian_multipliers(optimizer_dict, doo_ds)
@@ -148,7 +149,7 @@ class ReverseHg(HyperGradient):
             with tf.control_dependencies([hyper_grad_step]):  # first update hypergradinet then alphas.
                 _alpha_iter = tf.group(*[alpha.assign(dl_ds) for alpha, dl_ds
                                          in zip(alphas, tf.gradients(lag_phi_t, optimizer_dict.state))])
-            self._alpha_iter = tf.group(self._alpha_iter, _alpha_iter)
+            self._alpha_iter = tf.group(self._alpha_iter, _alpha_iter)  # put all the backward iterations toghether
 
             [self._hypergrad_dictionary[h].append(hg) for h, hg in zip(hyper_list, hyper_grad_vars)]
 
