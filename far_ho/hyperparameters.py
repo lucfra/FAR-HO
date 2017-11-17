@@ -88,7 +88,9 @@ class HyperOptimizer:
     def minimize(self, outer_objective, outer_objective_optimizer, inner_objective, inner_objective_optimizer,
                  hyper_list=None, var_list=None, init_dynamics_dict=None, global_step=None):
         """
-        Single function for calling once `set_dynamics` and `set_problem`. Returns method run, that runs one
+        Single function for calling once `set_dynamics`, `set_problem` and optionally set an initial dynamics
+        .
+        Returns method run, that runs one
         hyperiteration.
 
         :param init_dynamics_dict:
@@ -105,14 +107,30 @@ class HyperOptimizer:
         self.set_problem(outer_objective, optim_dict, outer_objective_optimizer, hyper_list, global_step)
         return self.finalize()
 
-    def finalize(self):
+    def finalize(self, aggregation_fn=None, process_fn=None):
         """
         To be called when no more dynamics or problems are added, computes the updates
         for the hyperparameters. This is to behave nicely with global_variables_initializer.
 
+        :param aggregation_fn: Optional operation to aggregate multiple hypergradients (for the same hyperparameter),
+                                by default reduce_mean
+        :param process_fn: Optional operation like clipping to be applied to hypergradients before performing
+                            a descent step.
+
         :return: the run method of this object.
         """
-        self._hyperit()
+        if self._fin_hts is None:
+            # in this way also far.optimizer can be used
+            _maybe_first_arg = lambda _v: _v[0] if isinstance(_v, tuple) else _v
+            # apply updates to each optimizer for outer objective minimization.
+            # each optimizer might have more than one group of hyperparameters to optimize
+            # and conversely different hyperparameters might be optimized with different optimizers.
+            self._fin_hts = tf.group(*[_maybe_first_arg(opt.apply_gradients(
+                self.hypergradient.hgrads_hvars(hyper_list=hll, aggregation_fn=aggregation_fn, process_fn=process_fn)))
+                for opt, hll in self._h_optim_dict.items()])
+            if self._global_step:
+                with tf.control_dependencies([self._fin_hts]):
+                    self._fin_hts = self._global_step.assign_add(1).op
         return self.run
 
     @property
@@ -122,23 +140,13 @@ class HyperOptimizer:
         """
         return self._hypergradient
 
+    @property
     def _hyperit(self):  # TODO add names
         """
         iteration of minimization of outer objective(s).
         :return:
         """
-        if self._fin_hts is None:
-            # in this way also far.optimizer can be used
-            _maybe_first_arg = lambda _v: _v[0] if isinstance(_v, tuple) else _v
-            # apply updates to each optimizer for outer objective minimization.
-            # each optimizer might have more than one group of hyperparameters to optimize
-            # and conversely different hyperparameters might be optimized with different optimizers.
-            self._fin_hts = tf.group(*[_maybe_first_arg(opt.apply_gradients(
-                self.hypergradient.hgrads_hvars(hyper_list=hll)))
-                for opt, hll in self._h_optim_dict.items()])
-            if self._global_step:
-                with tf.control_dependencies([self._fin_hts]):
-                    self._fin_hts = self._global_step.assign_add(1).op
+        assert self._fin_hts is not None, 'Must call HyperOptimizer.finalize before performing optimization.'
         return self._fin_hts
 
     def run(self, T_or_generator, inner_objective_feed_dicts=None, outer_objective_feed_dicts=None,

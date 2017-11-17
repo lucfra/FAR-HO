@@ -13,20 +13,22 @@ class HyperGradient:
         self._hypergrad_dictionary = defaultdict(lambda: [])  # dictionary (hyperarameter, list of hypergradients)
 
     def compute_gradients(self, outer_objective, optimizer_dict, hyper_list=None):
-        # """
-        # Returns variables that store the values of the hypergradients
-        #
-        # :param outer_objective: a loss function for the hyperparameters
-        # :param hyper_list: list of hyperparameters. If `None`
-        # :return: list of pairs (hyperparameter, hypergradient) to be used with the method apply gradients!
-        # """
+        # Doesn't do anything useful here. To be overridden.
+        """
+        Function overridden by specific methods.
+
+        :param optimizer_dict: OptimzerDict object resulting from the inner objective optimization.
+        :param outer_objective: A loss function for the hyperparameters (scalar tensor)
+        :param hyper_list: Optional list of hyperparameters to consider. If not provided will get all variables in the
+                            hyperparameter collection in the current scope.
+
+        :return: list of hyperparameters involved in the computation
+        """
         assert isinstance(optimizer_dict, OptimizerDict)
         self._optimizer_dicts.add(optimizer_dict)
 
-        scope = tf.get_variable_scope()
-        # get hyperparameters
-        if hyper_list is None:
-            hyper_list = utils.hyperparameters(scope.name)
+        if hyper_list is None:  # get default hyperparameters
+            hyper_list = utils.hyperparameters(tf.get_variable_scope().name)
         return hyper_list
 
     @property
@@ -45,7 +47,18 @@ class HyperGradient:
             initializer_feed_dict=None, global_step=None, session=None, online=False):
         raise NotImplementedError()
 
-    def hgrads_hvars(self, hyper_list=None, aggregation_fn=None, process_gradients_fn=None):
+    def hgrads_hvars(self, hyper_list=None, aggregation_fn=None, process_fn=None):
+        """
+        Method for getting hypergradient and hyperparameters as required by apply_gradient methods from tensorflow 
+        optimizers.
+        
+        :param hyper_list: Optional list of hyperparameters to consider. If not provided will get all variables in the
+                            hyperparameter collection in the current scope.
+        :param aggregation_fn: Optional operation to aggregate multiple hypergradients (for the same hyperparameter),
+                                by default reduce_mean
+        :param process_fn: Optional operation like clipping to be applied.
+        :return: 
+        """
         if hyper_list is None:
             hyper_list = utils.hyperparameters(tf.get_variable_scope().name)
 
@@ -60,9 +73,9 @@ class HyperGradient:
             else:
                 with tf.name_scope(_hg_lst[0].op.name):
                     aggr = aggregation_fn(_hg_lst) if len(_hg_lst) > 1 else _hg_lst[0]
-            if process_gradients_fn is not None:
+            if process_fn is not None:
                 with tf.name_scope('process_gradients'):
-                    aggr = process_gradients_fn(aggr)
+                    aggr = process_fn(aggr)
             tf.add_to_collection(utils.GraphKeys.HYPERGRADIENTS, aggr)
             return aggr
 
@@ -80,51 +93,58 @@ class ReverseHg(HyperGradient):
     # noinspection SpellCheckingInspection
     def compute_gradients(self, outer_objective, optimizer_dict, hyper_list=None):
         """
-        Returns variables that store the values of the hypergradients
+        Function that adds to the computational graph all the operations needend for computing
+        the hypergradients in a "dynamic" way, without unrolling the entire optimization graph.
+        The resulting computation, while being roughly 2x more expensive then unrolling the
+        optimizaiton dynamics, requires much less (GPU) memory and is more flexible, allowing
+        to set a termination condition to the parameters optimizaiton routine.
 
-        :param optimizer_dict:
-        :param outer_objective: a loss function for the hyperparameters
-        :param hyper_list: list of hyperparameters. If `None`
-        :return: list of hyperparameters
+        :param optimizer_dict: OptimzerDict object resulting from the inner objective optimization.
+        :param outer_objective: A loss function for the hyperparameters (scalar tensor)
+        :param hyper_list: Optional list of hyperparameters to consider. If not provided will get all variables in the
+                            hyperparameter collection in the current scope.
+
+        :return: list of hyperparameters involved in the computation
         """
         hyper_list = super().compute_gradients(outer_objective, optimizer_dict, hyper_list)
 
         # derivative of outer objective w.r.t. state
-        with tf.variable_scope(outer_objective.op.name):
-            doo_ds = tf.gradients(outer_objective, optimizer_dict.state)
+        doo_ds = tf.gradients(outer_objective, optimizer_dict.state)
 
-            alphas = self._create_lagrangian_multipliers(optimizer_dict, doo_ds)
+        alphas = self._create_lagrangian_multipliers(optimizer_dict, doo_ds)
 
-            alpha_vec = utils.vectorize_all(alphas)
-            dyn_vec = utils.vectorize_all([d for (s, d) in optimizer_dict.dynamics])
-            lag_phi_t = utils.dot(alpha_vec, dyn_vec, name='iter_wise_lagrangian_part1')
-            # TODO outer_objective might be a list... handle this case
+        alpha_vec = utils.vectorize_all(alphas)
+        dyn_vec = utils.vectorize_all([d for (s, d) in optimizer_dict.dynamics])
+        lag_phi_t = utils.dot(alpha_vec, dyn_vec, name='iter_wise_lagrangian_part1')
+        # TODO outer_objective might be a list... handle this case
 
-            # iterative computation of hypergradients
-            doo_dypers = tf.gradients(outer_objective, hyper_list)  # (direct) derivative of outer objective w.r.t. hyp.
-            alpha_dot_B = tf.gradients(lag_phi_t, hyper_list)
-            # check that optimizer_dict has initial ops (phi_0)
-            if optimizer_dict.init_dynamics is not None:
-                lag_phi0 = utils.dot(alpha_vec, utils.vectorize_all([d for (s, d) in optimizer_dict.init_dynamics]))
+        # iterative computation of hypergradients
+        doo_dypers = tf.gradients(outer_objective, hyper_list)  # (direct) derivative of outer objective w.r.t. hyp.
+        alpha_dot_B = tf.gradients(lag_phi_t, hyper_list)
+        # check that optimizer_dict has initial ops (phi_0)
+        if optimizer_dict.init_dynamics is not None:
+            with tf.name_scope('Phi_0_hypergradient'):
+                lag_phi0 = utils.dot(alpha_vec, utils.vectorize_all([d for (s, d) in optimizer_dict.init_dynamics]),
+                                     name='lagrangian_Phi0')
                 alpha_dot_B0 = tf.gradients(lag_phi0, hyper_list)
-            else:
-                alpha_dot_B0 = [None] * len(hyper_list)
+        else:
+            alpha_dot_B0 = [None] * len(hyper_list)
 
-            # here is some of this is None it may mean that the hyperparameter compares inside phi_0: check that and
-            # if it is not the case return error...
-            hyper_grad_vars, hyper_grad_step = [], tf.no_op()
-            for dl_dh, doo_dh, a_d_b0, hyper in zip(alpha_dot_B, doo_dypers, alpha_dot_B0, hyper_list):
-                assert dl_dh is not None or a_d_b0 is not None, 'Hyperparameter %s is detached from ' \
-                                                                'this dyamics' % hyper
-                hgv = None
-                if dl_dh is not None:  # "normal hyperparameter"
-                    hgv = self._create_hypergradient(hyper, doo_dh)
+        # here is some of this is None it may mean that the hyperparameter compares inside phi_0: check that and
+        # if it is not the case return error...
+        hyper_grad_vars, hyper_grad_step = [], tf.no_op()
+        for dl_dh, doo_dh, a_d_b0, hyper in zip(alpha_dot_B, doo_dypers, alpha_dot_B0, hyper_list):
+            assert dl_dh is not None or a_d_b0 is not None, 'Hyperparameter %s is detached from ' \
+                                                            'this dyamics' % hyper
+            hgv = None
+            if dl_dh is not None:  # "normal hyperparameter"
+                hgv = self._create_hypergradient(hyper, doo_dh)
 
-                    hyper_grad_step = tf.group(hyper_grad_step, hgv.assign_add(dl_dh))
-                if a_d_b0 is not None:
-                    hgv = hgv + a_d_b0 if hgv is not None else a_d_b0
-                    # here hyper_grad_step has nothing to do...
-                hyper_grad_vars.append(hgv)  # save these...
+                hyper_grad_step = tf.group(hyper_grad_step, hgv.assign_add(dl_dh))
+            if a_d_b0 is not None:  # add or set hyper-gradient of Phi_0 (initial dynamics)
+                hgv = hgv + a_d_b0 if hgv is not None else a_d_b0
+                # here hyper_grad_step has nothing to do...
+            hyper_grad_vars.append(hgv)  # save these...
 
             with tf.control_dependencies([hyper_grad_step]):  # first update hypergradinet then alphas.
                 _alpha_iter = tf.group(*[alpha.assign(dl_ds) for alpha, dl_ds
@@ -137,7 +157,7 @@ class ReverseHg(HyperGradient):
                                                  tf.variables_initializer(alphas),
                                                  tf.variables_initializer([h for h in hyper_grad_vars
                                                                            if hasattr(h, 'initializer')]))  # some ->
-            # hypergradients might be just tensors and not variables...
+            # hypergradients (those coming form initial dynamics) might be just tensors and not variables...
 
             return hyper_list
 
@@ -181,8 +201,8 @@ class ReverseHg(HyperGradient):
         for t in range(T_or_generator) if isinstance(T_or_generator, int) else T_or_generator:
             self._history.append(ss.run(self.iteration,
                                         feed_dict=utils.maybe_call(inner_objective_feed_dicts, t)))
-        # initialization of support variables (supports stochastic evaluation of outer objective via global_step
-        # variable
+        # initialization of support variables (supports stochastic evaluation of outer objective via global_step ->
+        # variable)
         ss.run(self._reverse_initializer, feed_dict=utils.maybe_call(outer_objective_feed_dicts,
                                                                      utils.maybe_eval(global_step, ss)))
         for pt, state_feed_dict in self._state_feed_dict_generator(reversed(self._history[:-1])):
@@ -200,7 +220,7 @@ class UnrolledReverseHG(HyperGradient):
             initializer_feed_dict=None, global_step=None, session=None, online=False):
         return NotImplemented()
 
-    # def
+    # maybe... it would require a certain effort...
 
 
 class ForwardHG(HyperGradient):
