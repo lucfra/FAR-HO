@@ -45,25 +45,28 @@ class HyperGradient:
             initializer_feed_dict=None, global_step=None, session=None, online=False):
         raise NotImplementedError()
 
-    def hgrads_hvars(self, aggregation_op=None, hyper_list=None):
+    def hgrads_hvars(self, hyper_list=None, aggregation_fn=None, process_gradients_fn=None):
         if hyper_list is None:
             hyper_list = utils.hyperparameters(tf.get_variable_scope().name)
 
         assert all([h in self._hypergrad_dictionary for h in hyper_list]), 'FINAL ERROR!'
 
-        if aggregation_op is None:
-            aggregation_op = lambda hgrad_list: tf.reduce_mean(hgrad_list, axis=0)
+        if aggregation_fn is None:
+            aggregation_fn = lambda hgrad_list: tf.reduce_mean(hgrad_list, axis=0)
 
-        def _aggregate_and_manage_collection(_hg_lst):
+        def _aggregate_process_manage_collection(_hg_lst):
             if len(_hg_lst) == 1:  # avoid useless operations...
                 aggr = _hg_lst[0]
             else:
                 with tf.name_scope(_hg_lst[0].op.name):
-                    aggr = aggregation_op(_hg_lst) if len(_hg_lst) > 1 else _hg_lst[0]
+                    aggr = aggregation_fn(_hg_lst) if len(_hg_lst) > 1 else _hg_lst[0]
+            if process_gradients_fn is not None:
+                with tf.name_scope('process_gradients'):
+                    aggr = process_gradients_fn(aggr)
             tf.add_to_collection(utils.GraphKeys.HYPERGRADIENTS, aggr)
             return aggr
 
-        return [(_aggregate_and_manage_collection(self._hypergrad_dictionary[h]),
+        return [(_aggregate_process_manage_collection(self._hypergrad_dictionary[h]),
                  h) for h in hyper_list]
 
 

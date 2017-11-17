@@ -67,7 +67,7 @@ class HyperOptimizer:
         return optim_dict
 
     def set_problem(self, outer_objective, optim_dict, outer_objective_optimizer,
-                 hyper_list=None, global_step=None):
+                    hyper_list=None, global_step=None):
         """
         Set the outer optimization problem and the descent procedure for the optimization of the
         hyperparameters. Can be called at least once for every call of set_dynamics, passing the resulting
@@ -135,7 +135,7 @@ class HyperOptimizer:
             # and conversely different hyperparameters might be optimized with different optimizers.
             self._fin_hts = tf.group(*[_maybe_first_arg(opt.apply_gradients(
                 self.hypergradient.hgrads_hvars(hyper_list=hll)))
-                                       for opt, hll in self._h_optim_dict.items()])
+                for opt, hll in self._h_optim_dict.items()])
             if self._global_step:
                 with tf.control_dependencies([self._fin_hts]):
                     self._fin_hts = self._global_step.assign_add(1).op
