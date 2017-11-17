@@ -109,42 +109,41 @@ class ReverseHg(HyperGradient):
         hyper_list = super().compute_gradients(outer_objective, optimizer_dict, hyper_list)
 
         # derivative of outer objective w.r.t. state
-        doo_ds = tf.gradients(outer_objective, optimizer_dict.state)
+        with tf.variable_scope(outer_objective.op.name):
+            doo_ds = tf.gradients(outer_objective, optimizer_dict.state)
 
-        alphas = self._create_lagrangian_multipliers(optimizer_dict, doo_ds)
+            alphas = self._create_lagrangian_multipliers(optimizer_dict, doo_ds)
 
-        alpha_vec = utils.vectorize_all(alphas)
-        dyn_vec = utils.vectorize_all([d for (s, d) in optimizer_dict.dynamics])
-        lag_phi_t = utils.dot(alpha_vec, dyn_vec, name='iter_wise_lagrangian_part1')
-        # TODO outer_objective might be a list... handle this case
+            alpha_vec = utils.vectorize_all(alphas)
+            dyn_vec = utils.vectorize_all([d for (s, d) in optimizer_dict.dynamics])
+            lag_phi_t = utils.dot(alpha_vec, dyn_vec, name='iter_wise_lagrangian_part1')
+            # TODO outer_objective might be a list... handle this case
 
-        # iterative computation of hypergradients
-        doo_dypers = tf.gradients(outer_objective, hyper_list)  # (direct) derivative of outer objective w.r.t. hyp.
-        alpha_dot_B = tf.gradients(lag_phi_t, hyper_list)
-        # check that optimizer_dict has initial ops (phi_0)
-        if optimizer_dict.init_dynamics is not None:
-            with tf.name_scope('Phi_0_hypergradient'):
-                lag_phi0 = utils.dot(alpha_vec, utils.vectorize_all([d for (s, d) in optimizer_dict.init_dynamics]),
-                                     name='lagrangian_Phi0')
+            # iterative computation of hypergradients
+            doo_dypers = tf.gradients(outer_objective, hyper_list)  # (direct) derivative of outer objective w.r.t. hyp.
+            alpha_dot_B = tf.gradients(lag_phi_t, hyper_list)
+            # check that optimizer_dict has initial ops (phi_0)
+            if optimizer_dict.init_dynamics is not None:
+                lag_phi0 = utils.dot(alpha_vec, utils.vectorize_all([d for (s, d) in optimizer_dict.init_dynamics]))
                 alpha_dot_B0 = tf.gradients(lag_phi0, hyper_list)
-        else:
-            alpha_dot_B0 = [None] * len(hyper_list)
+            else:
+                alpha_dot_B0 = [None] * len(hyper_list)
 
-        # here is some of this is None it may mean that the hyperparameter compares inside phi_0: check that and
-        # if it is not the case return error...
-        hyper_grad_vars, hyper_grad_step = [], tf.no_op()
-        for dl_dh, doo_dh, a_d_b0, hyper in zip(alpha_dot_B, doo_dypers, alpha_dot_B0, hyper_list):
-            assert dl_dh is not None or a_d_b0 is not None, 'Hyperparameter %s is detached from ' \
-                                                            'this dyamics' % hyper
-            hgv = None
-            if dl_dh is not None:  # "normal hyperparameter"
-                hgv = self._create_hypergradient(hyper, doo_dh)
+            # here is some of this is None it may mean that the hyperparameter compares inside phi_0: check that and
+            # if it is not the case return error...
+            hyper_grad_vars, hyper_grad_step = [], tf.no_op()
+            for dl_dh, doo_dh, a_d_b0, hyper in zip(alpha_dot_B, doo_dypers, alpha_dot_B0, hyper_list):
+                assert dl_dh is not None or a_d_b0 is not None, 'Hyperparameter %s is detached from ' \
+                                                                'this dyamics' % hyper
+                hgv = None
+                if dl_dh is not None:  # "normal hyperparameter"
+                    hgv = self._create_hypergradient(hyper, doo_dh)
 
-                hyper_grad_step = tf.group(hyper_grad_step, hgv.assign_add(dl_dh))
-            if a_d_b0 is not None:  # add or set hyper-gradient of Phi_0 (initial dynamics)
-                hgv = hgv + a_d_b0 if hgv is not None else a_d_b0
-                # here hyper_grad_step has nothing to do...
-            hyper_grad_vars.append(hgv)  # save these...
+                    hyper_grad_step = tf.group(hyper_grad_step, hgv.assign_add(dl_dh))
+                if a_d_b0 is not None:
+                    hgv = hgv + a_d_b0 if hgv is not None else a_d_b0
+                    # here hyper_grad_step has nothing to do...
+                hyper_grad_vars.append(hgv)  # save these...
 
             with tf.control_dependencies([hyper_grad_step]):  # first update hypergradinet then alphas.
                 _alpha_iter = tf.group(*[alpha.assign(dl_ds) for alpha, dl_ds
