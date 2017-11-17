@@ -86,26 +86,17 @@ class HyperOptimizer:
         return self
 
     def minimize(self, outer_objective, outer_objective_optimizer, inner_objective, inner_objective_optimizer,
-                 hyper_list=None, var_list=None, init_dynamics_dict=None, global_step=None):
+                 hyper_list=None, var_list=None, init_dynamics_dict=None, global_step=None,
+                 aggregation_fn=None, process_fn=None):
         """
-        Single function for calling once `set_dynamics`, `set_problem` and optionally set an initial dynamics
-        .
-        Returns method run, that runs one
-        hyperiteration.
+        Single function for calling once `set_dynamics`, `set_problem` and `finalize`, and optionally
+        set an initial dynamics.
 
-        :param init_dynamics_dict:
-        :param outer_objective:
-        :param outer_objective_optimizer:
-        :param inner_objective:
-        :param inner_objective_optimizer:
-        :param hyper_list:
-        :param var_list:
-        :param global_step:
-        :return:
+        Returns method `HyperOptimizer.run`, that runs one hyperiteration.
         """
         optim_dict = self.set_dynamics(inner_objective, inner_objective_optimizer, var_list, init_dynamics_dict)
         self.set_problem(outer_objective, optim_dict, outer_objective_optimizer, hyper_list, global_step)
-        return self.finalize()
+        return self.finalize(aggregation_fn=aggregation_fn, process_fn=process_fn)
 
     def finalize(self, aggregation_fn=None, process_fn=None):
         """
