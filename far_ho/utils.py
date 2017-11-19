@@ -1,4 +1,6 @@
 import tensorflow as tf
+import sys
+# noinspection PyUnresolvedReferences
 from experiment_manager.utils import *
 
 
@@ -103,8 +105,11 @@ def remove_from_collection(key, *lst):
     """
     Remove tensors in lst from collection given by key
     """
-    # noinspection PyProtectedMember
-    [tf.get_default_graph()._collections[key].remove(e) for e in lst]
+    try:
+        # noinspection PyProtectedMember
+        [tf.get_default_graph()._collections[key].remove(e) for e in lst]
+    except ValueError:
+        print('WARNING: some element in %s was not in the collection %s' % (key, lst), file=sys.stderr)
 
 
 def _maybe_add(a, b):
