@@ -149,7 +149,7 @@ class GradientDescentOptimizer(Optimizer, tf.train.GradientDescentOptimizer):
         dynamics = []
         for g, w in grads_and_vars:
             wk = w - self._learning_rate_tensor * g
-            dynamics += [(w, wk)]
+            dynamics.append((w, wk))
         return ts, dynamics
 
 
@@ -171,7 +171,7 @@ class MomentumOptimizer(Optimizer, tf.train.MomentumOptimizer):
             m = self.get_slot(w, mn)
             mk = self._momentum_tensor * m + g
             wk = w - self._learning_rate_tensor * mk
-            dynamics += [(w, wk), (m, mk)]
+            dynamics.extend([(w, wk), (m, mk)])
 
         return ts, dynamics
 
