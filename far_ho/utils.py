@@ -1,7 +1,18 @@
 import tensorflow as tf
 import sys
 # noinspection PyUnresolvedReferences
-from experiment_manager.utils import *
+try:
+    from experiment_manager.utils import *
+except ImportError:
+    # print('package experiment_manager not found')
+
+    def flatten_list(lst):
+        from itertools import chain
+        return list(chain(*lst))
+
+
+    def merge_dicts(*dicts):
+        return reduce(lambda a, nd: {**a, **nd}, dicts, {})
 
 
 # noinspection PyClassHasNoInit

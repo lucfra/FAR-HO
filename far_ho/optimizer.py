@@ -114,7 +114,7 @@ class OptimizerDict:
 class Optimizer(tf.train.Optimizer):
     def minimize(self, loss, global_step=None, var_list=None, gate_gradients=tf.train.Optimizer.GATE_OP,
                  aggregation_method=None, colocate_gradients_with_ops=False, name=None, grad_loss=None):
-                 # compute_ddyn_dhypers=False, hyperparameters=None):
+        # compute_ddyn_dhypers=False, hyperparameters=None):  (looks like these parameters are no longer needed)
         """
         Returns a training step operation and the training dynamics in the form of
         list of var_and_dynamics where var are both variables in `var_list` and also additional state (auxiliary)
@@ -126,8 +126,7 @@ class Optimizer(tf.train.Optimizer):
                                    colocate_gradients_with_ops, name, grad_loss)
         # ddyn_dhypers = self._compute_ddyn_dhypers(loss, colocate_gradients_with_ops, aggregation_method,
         #                                           gate_gradients, hyperparameters) if compute_ddyn_dhypers else None
-        return OptimizerDict(ts=ts, dynamics=dyn)
-                 # ddyn_dhypers=ddyn_dhypers)
+        return OptimizerDict(ts=ts, dynamics=dyn)  # ddyn_dhypers=ddyn_dhypers)
 
     # def _compute_ddyn_dhypers(self, loss, colocate_gradients_with_ops=None, aggregation_method=None,
     #                           gate_gradients=None, hyperparameters=None):
@@ -184,11 +183,10 @@ class AdamOptimizer(Optimizer, tf.train.AdamOptimizer):
 
     def minimize(self, loss, global_step=None, var_list=None, gate_gradients=tf.train.Optimizer.GATE_OP,
                  aggregation_method=None, colocate_gradients_with_ops=False, name=None, grad_loss=None):
-                 # compute_ddyn_dhypers=False, hyperparameters=None):
         # TODO extend OptimizerDict to take into account also
         # self._beta1_power and self._beta2_power
         return super().minimize(loss, global_step, var_list, gate_gradients, aggregation_method,
                                 colocate_gradients_with_ops, name, grad_loss)
-                 # , compute_ddyn_dhypers, hyperparameters)
+        # , compute_ddyn_dhypers, hyperparameters)
 
 # variables.PartitionedVariable

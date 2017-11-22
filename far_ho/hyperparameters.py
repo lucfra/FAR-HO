@@ -10,7 +10,7 @@ except ImportError:
 
 from far_ho.optimizer import Optimizer
 from far_ho.hypergradients import ReverseHg, HyperGradient
-from far_ho.utils import GraphKeys, maybe_call, maybe_eval
+from far_ho.utils import GraphKeys
 
 HYPERPARAMETERS_COLLECTIONS = (GraphKeys.HYPERPARAMETERS, GraphKeys.GLOBAL_VARIABLES)
 
@@ -42,7 +42,8 @@ class HyperOptimizer:
         self._global_step = None
         self._h_optim_dict = defaultdict(lambda: OrderedSet())
 
-    def set_dynamics(self, inner_objective, inner_objective_optimizer, var_list=None, init_dynamics_dict=None,
+    @staticmethod
+    def set_dynamics(inner_objective, inner_objective_optimizer, var_list=None, init_dynamics_dict=None,
                      **minimize_kwargs):
         """
         Set the dynamics Phi: a descent procedure on some inner_objective, can be called multiple times, for instance
