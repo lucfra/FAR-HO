@@ -15,6 +15,13 @@ except ImportError:
         return reduce(lambda a, nd: {**a, **nd}, dicts, {})
 
 
+    def as_list(obj):
+        """
+        Makes sure `obj` is a list or otherwise converts it to a list with a single element.
+        """
+        return obj if isinstance(obj, list) else [obj]
+
+
 # noinspection PyClassHasNoInit
 class GraphKeys(tf.GraphKeys):
     """
