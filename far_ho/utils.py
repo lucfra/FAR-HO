@@ -12,6 +12,7 @@ except ImportError:
 
 
     def merge_dicts(*dicts):
+        from functools import reduce
         return reduce(lambda a, nd: {**a, **nd}, dicts, {})
 
 
@@ -83,6 +84,15 @@ def vectorize_all(var_list, name=None):
         return tf.concat([tf.reshape(_w, [-1]) for _w in var_list], 0)
 
 
+def maybe_call(obj, *args, **kwargs):
+    """
+    Calls obj with args and kwargs and return its result if obj is callable, otherwise returns obj.
+    """
+    if callable(obj):
+        return obj(*args, **kwargs)
+    return obj
+
+
 def dot(a, b, name=None):
     """
     Dot product between vectors `a` and `b` with optional name
@@ -119,6 +129,8 @@ def remove_from_collection(key, *lst):
         [tf.get_default_graph()._collections[key].remove(e) for e in lst]
     except ValueError:
         print('WARNING: some element in %s was not in the collection - %s -' % (lst, key), file=sys.stderr)
+        print('WARNING: Collection -> {} <- does not contain some tennsor in {}'.format(key, lst),
+              file=sys.stderr)
 
 
 def _maybe_add(a, b):
