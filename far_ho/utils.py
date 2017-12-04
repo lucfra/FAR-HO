@@ -128,8 +128,7 @@ def remove_from_collection(key, *lst):
         # noinspection PyProtectedMember
         [tf.get_default_graph()._collections[key].remove(e) for e in lst]
     except ValueError:
-        print('WARNING: some element in %s was not in the collection - %s -' % (lst, key), file=sys.stderr)
-        print('WARNING: Collection -> {} <- does not contain some tennsor in {}'.format(key, lst),
+        print('WARNING: Collection -> {} <- does not contain some tensor in {}'.format(key, lst),
               file=sys.stderr)
 
 
