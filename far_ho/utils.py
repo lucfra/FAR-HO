@@ -102,7 +102,7 @@ def dot(a, b, name=None):
 
 
 def _check():
-    print(3)
+    print(4)
 
 
 def maybe_eval(a, ss=None):
@@ -132,7 +132,7 @@ def remove_from_collection(key, *lst):
               file=sys.stderr)
 
 
-def _maybe_add(a, b):
+def maybe_add(a, b):
     """
     return a if b is None else a + b
     """

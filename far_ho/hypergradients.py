@@ -4,6 +4,7 @@ import tensorflow as tf
 from tensorflow.python.training import slot_creator
 
 from far_ho import utils
+from far_ho.utils import dot, vectorize_all, maybe_add
 from far_ho.optimizer import OptimizerDict
 
 
@@ -11,6 +12,15 @@ class HyperGradient:
     def __init__(self):
         self._optimizer_dicts = set()
         self._hypergrad_dictionary = defaultdict(lambda: [])  # dictionary (hyperarameter, list of hypergradients)
+        self._ts = None
+
+    _ERROR_NOT_OPTIMIZER_DICT = """
+    Looks like {} is not an `OptimizerDict`. Use optimizers in far_ho.optimizers for obtaining an OptimizerDict.
+    """
+
+    _ERROR_HYPER_DETACHED = """
+    Hyperparameter {} is detached from this optimization dynamics.
+    """
 
     def compute_gradients(self, outer_objective, optimizer_dict, hyper_list=None):
         # Doesn't do anything useful here. To be overridden.
@@ -24,7 +34,7 @@ class HyperGradient:
 
         :return: list of hyperparameters involved in the computation
         """
-        assert isinstance(optimizer_dict, OptimizerDict)
+        assert isinstance(optimizer_dict, OptimizerDict), HyperGradient._ERROR_NOT_OPTIMIZER_DICT.format(optimizer_dict)
         self._optimizer_dicts.add(optimizer_dict)
 
         if hyper_list is None:  # get default hyperparameters
@@ -39,12 +49,34 @@ class HyperGradient:
     def iteration(self):
         return utils.flatten_list([opt_dict.iteration for opt_dict in sorted(self._optimizer_dicts)])
 
+    def _init_ts(self):
+        return tf.group(*[opt_dict.ts for opt_dict in sorted(self._optimizer_dicts)])
+
     @property
     def ts(self):
-        return tf.group(*[opt_dict.ts for opt_dict in sorted(self._optimizer_dicts)])
+        if self._ts is None:
+            self._ts = self._init_ts()
+        return self._ts
 
     def run(self, T_or_generator, inner_objective_feed_dicts=None, outer_objective_feed_dicts=None,
             initializer_feed_dict=None, global_step=None, session=None, online=False):
+        """
+        Runs the inner optimization dynamics for T iterations (T_or_generator can be indeed a generator) and computes
+        in the meanwhile.
+
+        :param T_or_generator: integer or generator that should yield a step. Total number of iterations of
+                                inner objective optimization dynamics
+        :param inner_objective_feed_dicts: Optional feed dictionary for the inner objective
+        :param outer_objective_feed_dicts: Optional feed dictionary for the outer objective
+                                            (note that this is not used in ForwardHG since hypergradients are not
+                                            variables)
+        :param initializer_feed_dict: Optional feed dictionary for the inner objective
+        :param global_step: Optional global step for the
+        :param session: Optional session (otherwise will take the default session)
+        :param online: Performs the computation of the hypergradient in the online (or "real time") mode. Note that
+                        `ReverseHG` and `ForwardHG` behave differently.
+
+        """
         raise NotImplementedError()
 
     def hgrads_hvars(self, hyper_list=None, aggregation_fn=None, process_fn=None):
@@ -109,14 +141,14 @@ class ReverseHg(HyperGradient):
         hyper_list = super().compute_gradients(outer_objective, optimizer_dict, hyper_list)
 
         # derivative of outer objective w.r.t. state
-        with tf.variable_scope(outer_objective.op.name):  # FIXME for some reason without this there is a cathastrofic
+        with tf.variable_scope(outer_objective.op.name):  # for some reason without this there is a cathastrofic
             # failure...
             doo_ds = tf.gradients(outer_objective, optimizer_dict.state)
 
             alphas = self._create_lagrangian_multipliers(optimizer_dict, doo_ds)
 
             alpha_vec = utils.vectorize_all(alphas)
-            dyn_vec = utils.vectorize_all([d for (s, d) in optimizer_dict.dynamics])
+            dyn_vec = utils.vectorize_all(optimizer_dict.dynamics)
             lag_phi_t = utils.dot(alpha_vec, dyn_vec, name='iter_wise_lagrangian_part1')
             # TODO outer_objective might be a list... handle this case
 
@@ -134,8 +166,7 @@ class ReverseHg(HyperGradient):
             # if it is not the case return error...
             hyper_grad_vars, hyper_grad_step = [], tf.no_op()
             for dl_dh, doo_dh, a_d_b0, hyper in zip(alpha_dot_B, doo_dypers, alpha_dot_B0, hyper_list):
-                assert dl_dh is not None or a_d_b0 is not None, 'Hyperparameter %s is detached from ' \
-                                                                'this dyamics' % hyper
+                assert dl_dh is not None or a_d_b0 is not None, HyperGradient._ERROR_HYPER_DETACHED.format(hyper)
                 hgv = None
                 if dl_dh is not None:  # "normal hyperparameter"
                     hgv = self._create_hypergradient(hyper, doo_dh)
@@ -220,29 +251,103 @@ class UnrolledReverseHG(HyperGradient):
             initializer_feed_dict=None, global_step=None, session=None, online=False):
         return NotImplemented()
 
-    # maybe... it would require a certain effort...
+        # maybe... it would require a certain effort...
 
 
 class ForwardHG(HyperGradient):
     def __init__(self):
         super().__init__()
-        self._forw_initializer = tf.no_op()
+        self._forward_initializer = tf.no_op()
         self._z_iter = tf.no_op()
+        self._iteration = None
+
+    _HYPER_RANK_ERROR_MESSAGE = """
+    ForwardHG: Only scalar hyperparameters accepted.\n
+     Hyperparameter tensor {} has rank {}.\n
+     Use keyword argument far_ho.get_hyperparameter(..., scalar=True) on hyperparameter creation.
+    """
 
     def compute_gradients(self, outer_objective, optimizer_dict, hyper_list=None):
         hyper_list = super().compute_gradients(outer_objective, optimizer_dict, hyper_list)
 
+        # scalar_hyper_list
+
+        with tf.variable_scope(outer_objective.op.name):
+            dynamics_vec = vectorize_all(optimizer_dict.dynamics)
+            d_oo_d_state = tf.gradients(outer_objective, optimizer_dict.state)
+            with tf.name_scope('DUMMY'):  # variables to compute forward propagation
+                # TODO avoid this computation if optimizer_dict has already been seen.
+                aux_v = [tf.ones_like(v) for v in optimizer_dict.state]
+                aux_v_vec = vectorize_all(aux_v)
+                dynamics_dot_aux_v = dot(dynamics_vec, aux_v_vec)
+                init_dynamics_dot_aux_v = None
+                if optimizer_dict.init_dynamics:
+                    init_dynamics_dot_aux_v = dot(vectorize_all(optimizer_dict.init_dynamics), aux_v_vec)
+
+            for hyp in hyper_list:
+                assert hyp.shape.ndims == 0, ForwardHG._HYPER_RANK_ERROR_MESSAGE.format(hyp, hyp.shape.ndims)
+
+                d_init_dyn_d_hyp = None if init_dynamics_dot_aux_v is None else \
+                    tf.gradients(init_dynamics_dot_aux_v, hyp)[0]
+                d_dyn_d_hyp = tf.gradients(dynamics_dot_aux_v, hyp)[0]
+                d_oo_d_hyp = tf.gradients(outer_objective, hyp)[0]
+                assert d_init_dyn_d_hyp is not None or d_dyn_d_hyp is not None or\
+                    d_oo_d_hyp is not None, HyperGradient._ERROR_HYPER_DETACHED.format(hyp)
+
+                # UPDATE OF TOTAL DERIVATIVE OF STATE W.R.T. HYPERPARAMETER
+                zs = ForwardHG._create_z(
+                    optimizer_dict, hyp, None if d_init_dyn_d_hyp is None else tf.gradients(d_init_dyn_d_hyp, aux_v)
+                )
+                dyn_dot_zs = dot(dynamics_vec, vectorize_all(zs))
+                Bs = tf.gradients(d_dyn_d_hyp, aux_v)
+                _z_iter = tf.group(*[
+                    z.assign(maybe_add(A_dot_z, B)) for z, A_dot_z, B
+                    in zip(zs, tf.gradients(dyn_dot_zs, optimizer_dict.state), Bs)
+                ])
+                self._z_iter = tf.group(self._z_iter, _z_iter)
+
+                # HYPERGRADIENT
+                print(d_oo_d_state)
+                print(zs)
+                d_E_T = [dot(d_oo_d_s, z) for d_oo_d_s, z in zip(d_oo_d_state, zs)
+                         if d_oo_d_s is not None and z is not None]
+                print(d_E_T)
+                hg = maybe_add(tf.reduce_sum(d_E_T), d_oo_d_hyp)
+
+                self._hypergrad_dictionary[hyp].append(hg)
+
+                self._forward_initializer = tf.group(self._forward_initializer,
+                                                     tf.variables_initializer(zs))
+
         return hyper_list
 
-    # @staticmethod
-    # def _create_z(optimizer_dict, hyper):
-    #     zs = [slot_creator.create_slot(v, tf.zero(der, v), 'z_%s' % hyper.op.name) for v, der
-    #                in zip(optimizer_dict.state)]
-    #     [tf.add_to_collection(utils.GraphKeys.LAGRANGIAN_MULTIPLIERS, lm) for lm in lag_mul]
-    #     utils.remove_from_collection(utils.GraphKeys.GLOBAL_VARIABLES, *lag_mul)
-    #     # this prevents the 'automatic' initialization with tf.global_variables_initializer.
-    #     return lag_mul
+    @staticmethod
+    def _create_z(optimizer_dict, hyper, d_init_dynamics_d_hyper):
+        if d_init_dynamics_d_hyper is None: d_init_dynamics_d_hyper = [None]*len(optimizer_dict.state)
+        with tf.variable_scope('Z'):
+            z = [slot_creator.create_slot(v, utils.val_or_zero(der, v), hyper.op.name) for v, der
+                 in zip(optimizer_dict.state, d_init_dynamics_d_hyper)]
+            [tf.add_to_collection(utils.GraphKeys.ZS, lm) for lm in z]
+            # utils.remove_from_collection(utils.GraphKeys.GLOBAL_VARIABLES, *z)
+            # in this case it is completely fine to keep zs into the global variable...
+            return z
+
+    @property
+    def iteration(self):
+        if self._iteration is None:
+            with tf.control_dependencies(self._z_iter):
+                self._iteration = super()._init_ts()
+        return self._iteration
 
     def run(self, T_or_generator, inner_objective_feed_dicts=None, outer_objective_feed_dicts=None,
             initializer_feed_dict=None, global_step=None, session=None, online=False):
-        pass
+
+        ss = session or tf.get_default_session()
+
+        if not online:
+            ss.run(self.initialization, feed_dict=utils.maybe_call(
+                initializer_feed_dict, utils.maybe_eval(global_step, ss)))
+            ss.run(self._forward_initializer)
+
+        for t in range(T_or_generator) if isinstance(T_or_generator, int) else T_or_generator:
+            ss.run(self.iteration, utils.maybe_call(inner_objective_feed_dicts, t))

@@ -1,6 +1,11 @@
 from collections import defaultdict
+# from functools import reduce
 
 import tensorflow as tf
+import numpy as np
+import sys
+
+from far_ho.utils import maybe_call, maybe_eval, merge_dicts
 
 try:
     from ordered_set import OrderedSet
@@ -15,7 +20,8 @@ from far_ho.utils import GraphKeys
 HYPERPARAMETERS_COLLECTIONS = (GraphKeys.HYPERPARAMETERS, GraphKeys.GLOBAL_VARIABLES)
 
 
-def get_hyperparameter(name, initializer=None, shape=None, dtype=None):
+# noinspection PyArgumentList,PyTypeChecker
+def get_hyperparameter(name, initializer=None, shape=None, dtype=None, scalar=False):
     """
     Creates an hyperparameter variable, which is a GLOBAL_VARIABLE
     and HYPERPARAMETER. Mirrors the behavior of `tf.get_variable`.
@@ -24,10 +30,28 @@ def get_hyperparameter(name, initializer=None, shape=None, dtype=None):
     :param initializer: initializer or initial value (can be np.array or float)
     :param shape: optional shape, may be not needed depending on initializer
     :param dtype: optional type,  may be not needed depending on initializer
+    :param scalar: if True divides the hyperparameter in its scalar components (use with `ForwardHG`)
+
     :return: the newly created variable.
     """
-    return tf.get_variable(name, shape, dtype, initializer, trainable=False,
-                           collections=HYPERPARAMETERS_COLLECTIONS)
+    if not scalar:
+        return tf.get_variable(name, shape, dtype, initializer, trainable=False,
+                               collections=HYPERPARAMETERS_COLLECTIONS)
+    else:
+        with tf.variable_scope(name + '_components'):
+            _shape = shape or initializer.shape
+            if isinstance(_shape, tf.TensorShape):
+                _shape = _shape.as_list()
+            # _tmp_lst = reduce(lambda a, v: [a]*v, shape[::-1], None)
+            _tmp_lst = np.empty(_shape, object)
+            for k in range(np.multiply.reduce(_shape)):
+                indices = np.unravel_index(k, _shape)
+                # print(indices)
+                _ind_name = '_'.join([str(ind) for ind in indices])
+                _tmp_lst[indices] = tf.get_variable(_ind_name, (), dtype,
+                                                    initializer if callable(initializer) else initializer[indices],
+                                                    trainable=False, collections=HYPERPARAMETERS_COLLECTIONS)
+        return tf.convert_to_tensor(_tmp_lst.tolist(), name=name)
 
 
 class HyperOptimizer:
@@ -123,6 +147,9 @@ class HyperOptimizer:
             if self._global_step:
                 with tf.control_dependencies([self._fin_hts]):
                     self._fin_hts = self._global_step.assign_add(1).op
+        else:
+            print('HyperOptimizer: WARNING, finalize has already been called on this object, ' +
+                  'further calls have no effect', file=sys.stderr)
         return self.run
 
     @property
@@ -142,7 +169,8 @@ class HyperOptimizer:
         return self._fin_hts
 
     def run(self, T_or_generator, inner_objective_feed_dicts=None, outer_objective_feed_dicts=None,
-            initializer_feed_dict=None, session=None, online=False, _skip_hyper_ts=False):
+            initializer_feed_dict=None, optimization_step_feed_dict=None, session=None, online=False,
+            _skip_hyper_ts=False):
         """
         Run an hyper-iteration (i.e. train the model(s) and compute hypergradients) and updates the hyperparameters.
 
@@ -158,6 +186,7 @@ class HyperOptimizer:
                                             Can be a function of
                                             hyper-iterations steps (i.e. global variable), which may account for, e.g.
                                             stochastic initialization.
+        :param optimization_step_feed_dict: an optional feed dict for the iteration of the hyperparameter optimizer.
         :param session: optional session
         :param online: default `False` if `True` performs the online version of the algorithms (i.e. does not
                             reinitialize the state after at each run).
@@ -170,4 +199,13 @@ class HyperOptimizer:
                                 online=online, global_step=self._global_step)
         if not _skip_hyper_ts:
             ss = session or tf.get_default_session()
-            ss.run(self._hyperit)
+
+            def _opt_fd():
+                _od = maybe_call(optimization_step_feed_dict, maybe_eval(self._global_step)) \
+                    if optimization_step_feed_dict else {}  # e.g. hyper-learning rate is a placeholder
+                _oo_fd = maybe_call(outer_objective_feed_dicts, maybe_eval(self._global_step)) \
+                    if outer_objective_feed_dicts else {}  # this is used in ForwardHG. In ReverseHG should't be needed
+                # but it doesn't matter
+                return merge_dicts(_od, _oo_fd)
+
+            ss.run(self._hyperit, _opt_fd())

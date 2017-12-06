@@ -57,14 +57,14 @@ class OptimizerDict:
         """
         :return: The dynamics, a list of pairs (state_variable_k, state_variable_{k+1})
         """
-        return self._dynamics
+        return [d for (v, d) in self._dynamics]
 
     @property
     def state(self):
         """
         :return: All the state variables (optimized variables and possibly auxiliary variables) being optimized
         """
-        return [v for (v, d) in self.dynamics]  # overridden in Adam
+        return [v for (v, d) in self._dynamics]  # overridden in Adam
 
     def _state_read(self):
         """
