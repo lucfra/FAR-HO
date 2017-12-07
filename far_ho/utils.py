@@ -1,5 +1,26 @@
 import tensorflow as tf
-from experiment_manager.utils import *
+import sys
+# noinspection PyUnresolvedReferences
+try:
+    from experiment_manager.utils import *
+except ImportError:
+    # print('package experiment_manager not found')
+
+    def flatten_list(lst):
+        from itertools import chain
+        return list(chain(*lst))
+
+
+    def merge_dicts(*dicts):
+        from functools import reduce
+        return reduce(lambda a, nd: {**a, **nd}, dicts, {})
+
+
+    def as_list(obj):
+        """
+        Makes sure `obj` is a list or otherwise converts it to a list with a single element.
+        """
+        return obj if isinstance(obj, list) else [obj]
 
 
 # noinspection PyClassHasNoInit
@@ -77,11 +98,11 @@ def dot(a, b, name=None):
     Dot product between vectors `a` and `b` with optional name
     """
     with tf.name_scope(name, 'Dot', [a, b]):
-        return tf.reduce_sum(a*b, name=name)
+        return tf.reduce_sum(a*b)
 
 
 def _check():
-    print(3)
+    print(4)
 
 
 def maybe_eval(a, ss=None):
@@ -103,11 +124,15 @@ def remove_from_collection(key, *lst):
     """
     Remove tensors in lst from collection given by key
     """
-    # noinspection PyProtectedMember
-    [tf.get_default_graph()._collections[key].remove(e) for e in lst]
+    try:
+        # noinspection PyProtectedMember
+        [tf.get_default_graph()._collections[key].remove(e) for e in lst]
+    except ValueError:
+        print('WARNING: Collection -> {} <- does not contain some tensor in {}'.format(key, lst),
+              file=sys.stderr)
 
 
-def _maybe_add(a, b):
+def maybe_add(a, b):
     """
     return a if b is None else a + b
     """

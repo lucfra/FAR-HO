@@ -1,6 +1,11 @@
 from collections import defaultdict
+# from functools import reduce
 
 import tensorflow as tf
+import numpy as np
+import sys
+
+from far_ho.utils import maybe_call, maybe_eval, merge_dicts
 
 try:
     from ordered_set import OrderedSet
@@ -10,12 +15,13 @@ except ImportError:
 
 from far_ho.optimizer import Optimizer
 from far_ho.hypergradients import ReverseHg, HyperGradient
-from far_ho.utils import GraphKeys, maybe_call, maybe_eval
+from far_ho.utils import GraphKeys
 
 HYPERPARAMETERS_COLLECTIONS = (GraphKeys.HYPERPARAMETERS, GraphKeys.GLOBAL_VARIABLES)
 
 
-def get_hyperparameter(name, initializer=None, shape=None, dtype=None):
+# noinspection PyArgumentList,PyTypeChecker
+def get_hyperparameter(name, initializer=None, shape=None, dtype=None, scalar=False):
     """
     Creates an hyperparameter variable, which is a GLOBAL_VARIABLE
     and HYPERPARAMETER. Mirrors the behavior of `tf.get_variable`.
@@ -24,10 +30,28 @@ def get_hyperparameter(name, initializer=None, shape=None, dtype=None):
     :param initializer: initializer or initial value (can be np.array or float)
     :param shape: optional shape, may be not needed depending on initializer
     :param dtype: optional type,  may be not needed depending on initializer
+    :param scalar: if True divides the hyperparameter in its scalar components (use with `ForwardHG`)
+
     :return: the newly created variable.
     """
-    return tf.get_variable(name, shape, dtype, initializer, trainable=False,
-                           collections=HYPERPARAMETERS_COLLECTIONS)
+    if not scalar:
+        return tf.get_variable(name, shape, dtype, initializer, trainable=False,
+                               collections=HYPERPARAMETERS_COLLECTIONS)
+    else:
+        with tf.variable_scope(name + '_components'):
+            _shape = shape or initializer.shape
+            if isinstance(_shape, tf.TensorShape):
+                _shape = _shape.as_list()
+            # _tmp_lst = reduce(lambda a, v: [a]*v, shape[::-1], None)
+            _tmp_lst = np.empty(_shape, object)
+            for k in range(np.multiply.reduce(_shape)):
+                indices = np.unravel_index(k, _shape)
+                # print(indices)
+                _ind_name = '_'.join([str(ind) for ind in indices])
+                _tmp_lst[indices] = tf.get_variable(_ind_name, (), dtype,
+                                                    initializer if callable(initializer) else initializer[indices],
+                                                    trainable=False, collections=HYPERPARAMETERS_COLLECTIONS)
+        return tf.convert_to_tensor(_tmp_lst.tolist(), name=name)
 
 
 class HyperOptimizer:
@@ -42,7 +66,8 @@ class HyperOptimizer:
         self._global_step = None
         self._h_optim_dict = defaultdict(lambda: OrderedSet())
 
-    def set_dynamics(self, inner_objective, inner_objective_optimizer, var_list=None, init_dynamics_dict=None,
+    @staticmethod
+    def set_dynamics(inner_objective, inner_objective_optimizer, var_list=None, init_dynamics_dict=None,
                      **minimize_kwargs):
         """
         Set the dynamics Phi: a descent procedure on some inner_objective, can be called multiple times, for instance
@@ -67,7 +92,7 @@ class HyperOptimizer:
         return optim_dict
 
     def set_problem(self, outer_objective, optim_dict, outer_objective_optimizer,
-                 hyper_list=None, global_step=None):
+                    hyper_list=None, global_step=None):
         """
         Set the outer optimization problem and the descent procedure for the optimization of the
         hyperparameters. Can be called at least once for every call of set_dynamics, passing the resulting
@@ -86,33 +111,45 @@ class HyperOptimizer:
         return self
 
     def minimize(self, outer_objective, outer_objective_optimizer, inner_objective, inner_objective_optimizer,
-                 hyper_list=None, var_list=None, init_dynamics_dict=None, global_step=None):
+                 hyper_list=None, var_list=None, init_dynamics_dict=None, global_step=None,
+                 aggregation_fn=None, process_fn=None):
         """
-        Single function for calling once `set_dynamics` and `set_problem`. Returns method run, that runs one
-        hyperiteration.
+        Single function for calling once `set_dynamics`, `set_problem` and `finalize`, and optionally
+        set an initial dynamics.
 
-        :param init_dynamics_dict:
-        :param outer_objective:
-        :param outer_objective_optimizer:
-        :param inner_objective:
-        :param inner_objective_optimizer:
-        :param hyper_list:
-        :param var_list:
-        :param global_step:
-        :return:
+        Returns method `HyperOptimizer.run`, that runs one hyperiteration.
         """
         optim_dict = self.set_dynamics(inner_objective, inner_objective_optimizer, var_list, init_dynamics_dict)
         self.set_problem(outer_objective, optim_dict, outer_objective_optimizer, hyper_list, global_step)
-        return self.finalize()
+        return self.finalize(aggregation_fn=aggregation_fn, process_fn=process_fn)
 
-    def finalize(self):
+    def finalize(self, aggregation_fn=None, process_fn=None):
         """
         To be called when no more dynamics or problems are added, computes the updates
         for the hyperparameters. This is to behave nicely with global_variables_initializer.
 
+        :param aggregation_fn: Optional operation to aggregate multiple hypergradients (for the same hyperparameter),
+                                by default reduce_mean
+        :param process_fn: Optional operation like clipping to be applied to hypergradients before performing
+                            a descent step.
+
         :return: the run method of this object.
         """
-        self._hyperit()
+        if self._fin_hts is None:
+            # in this way also far.optimizer can be used
+            _maybe_first_arg = lambda _v: _v[0] if isinstance(_v, tuple) else _v
+            # apply updates to each optimizer for outer objective minimization.
+            # each optimizer might have more than one group of hyperparameters to optimize
+            # and conversely different hyperparameters might be optimized with different optimizers.
+            self._fin_hts = tf.group(*[_maybe_first_arg(opt.apply_gradients(
+                self.hypergradient.hgrads_hvars(hyper_list=hll, aggregation_fn=aggregation_fn, process_fn=process_fn)))
+                for opt, hll in self._h_optim_dict.items()])
+            if self._global_step:
+                with tf.control_dependencies([self._fin_hts]):
+                    self._fin_hts = self._global_step.assign_add(1).op
+        else:
+            print('HyperOptimizer: WARNING, finalize has already been called on this object, ' +
+                  'further calls have no effect', file=sys.stderr)
         return self.run
 
     @property
@@ -122,27 +159,18 @@ class HyperOptimizer:
         """
         return self._hypergradient
 
+    @property
     def _hyperit(self):  # TODO add names
         """
         iteration of minimization of outer objective(s).
         :return:
         """
-        if self._fin_hts is None:
-            # in this way also far.optimizer can be used
-            _maybe_first_arg = lambda _v: _v[0] if isinstance(_v, tuple) else _v
-            # apply updates to each optimizer for outer objective minimization.
-            # each optimizer might have more than one group of hyperparameters to optimize
-            # and conversely different hyperparameters might be optimized with different optimizers.
-            self._fin_hts = tf.group(*[_maybe_first_arg(opt.apply_gradients(
-                self.hypergradient.hgrads_hvars(hyper_list=hll)))
-                                       for opt, hll in self._h_optim_dict.items()])
-            if self._global_step:
-                with tf.control_dependencies([self._fin_hts]):
-                    self._fin_hts = self._global_step.assign_add(1).op
+        assert self._fin_hts is not None, 'Must call HyperOptimizer.finalize before performing optimization.'
         return self._fin_hts
 
     def run(self, T_or_generator, inner_objective_feed_dicts=None, outer_objective_feed_dicts=None,
-            initializer_feed_dict=None, session=None, online=False, _skip_hyper_ts=False):
+            initializer_feed_dict=None, optimization_step_feed_dict=None, session=None, online=False,
+            _skip_hyper_ts=False):
         """
         Run an hyper-iteration (i.e. train the model(s) and compute hypergradients) and updates the hyperparameters.
 
@@ -158,6 +186,7 @@ class HyperOptimizer:
                                             Can be a function of
                                             hyper-iterations steps (i.e. global variable), which may account for, e.g.
                                             stochastic initialization.
+        :param optimization_step_feed_dict: an optional feed dict for the iteration of the hyperparameter optimizer.
         :param session: optional session
         :param online: default `False` if `True` performs the online version of the algorithms (i.e. does not
                             reinitialize the state after at each run).
@@ -170,4 +199,13 @@ class HyperOptimizer:
                                 online=online, global_step=self._global_step)
         if not _skip_hyper_ts:
             ss = session or tf.get_default_session()
-            ss.run(self._hyperit())
+
+            def _opt_fd():
+                _od = maybe_call(optimization_step_feed_dict, maybe_eval(self._global_step)) \
+                    if optimization_step_feed_dict else {}  # e.g. hyper-learning rate is a placeholder
+                _oo_fd = maybe_call(outer_objective_feed_dicts, maybe_eval(self._global_step)) \
+                    if outer_objective_feed_dicts else {}  # this is used in ForwardHG. In ReverseHG should't be needed
+                # but it doesn't matter
+                return merge_dicts(_od, _oo_fd)
+
+            ss.run(self._hyperit, _opt_fd())
