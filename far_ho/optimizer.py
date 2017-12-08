@@ -180,29 +180,17 @@ class AdamOptimizer(Optimizer, tf.train.AdamOptimizer):
     def apply_gradients(self, grads_and_vars, global_step=None, name=None):
         ts = super().apply_gradients(grads_and_vars, global_step, name)
 
-        mn = self.get_slot_names()[0]
-        vn = self.get_slot_names()[1]
+        mn, vn = self.get_slot_names()
         dynamics = []
         for g, w in grads_and_vars:
             m = self.get_slot(w, mn)
             v = self.get_slot(w, vn)
             b1_pow, b2_pow = self._get_beta_accumulators()
-            mk = self._beta1 * m + (1 - self._beta1) * g
-            vk = self._beta2 * v + (1 - self._beta2) * g ** 2
-            b1_pow_k = b1_pow * self._beta1
-            b2_pow_k = b2_pow * self._beta2
-            lr_k = self._lr * tf.sqrt(1 - b2_pow_k) / (1 - b1_pow_k)
-            wk = w - lr_k * mk / (tf.sqrt(vk) + self._epsilon)
-            dynamics += [(w, wk), (m, mk), (v, vk), (b1_pow, b1_pow_k), (b2_pow, b2_pow_k)]
+            mk = self._beta1_t * m + (1. - self._beta1_t) * g
+            vk = self._beta2_t * v + (1. - self._beta2_t) * g * g
+            wk = w - self._lr_t * mk / (tf.sqrt(vk) + self._epsilon_t)
+            b1_powk = b1_pow * self._beta1_t
+            b2_powk = b2_pow * self._beta2_t
+            dynamics.extend([(w, wk), (m, mk), (v, vk), (b1_pow, b1_powk), (b2_pow, b2_powk)])
 
         return ts, dynamics
-
-    def minimize(self, loss, global_step=None, var_list=None, gate_gradients=tf.train.Optimizer.GATE_OP,
-                 aggregation_method=None, colocate_gradients_with_ops=False, name=None, grad_loss=None):
-        # TODO extend OptimizerDict to take into account also
-        # self._beta1_power and self._beta2_power
-        return super().minimize(loss, global_step, var_list, gate_gradients, aggregation_method,
-                                colocate_gradients_with_ops, name, grad_loss)
-        # , compute_ddyn_dhypers, hyperparameters)
-
-# variables.PartitionedVariable
