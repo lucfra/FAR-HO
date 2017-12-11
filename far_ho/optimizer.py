@@ -95,7 +95,7 @@ class OptimizerDict:
         if self._init_dyn is None:
             self._init_dyn = OrderedDict([(v, tf.identity(v)) for v in self.state])  # do nothing
         for k, v in init_dictionary.items():
-            assert k in self._init_dyn, 'Can set initial operation only for state variables in this object, got %s' % k
+            assert k in self._init_dyn, 'Can set initial dynamics only for state variables in this object, got %s' % k
             self._init_dyn[k] = v
 
     @property
@@ -103,7 +103,7 @@ class OptimizerDict:
         """
         :return: The initialization dynamics if it has been set, or `None` otherwise.
         """
-        return None if self._init_dyn is None else self._init_dyn.items()
+        return None if self._init_dyn is None else list(self._init_dyn.items())
 
     def __lt__(self, other):  # make OptimizerDict sortable
         assert isinstance(other, OptimizerDict)
