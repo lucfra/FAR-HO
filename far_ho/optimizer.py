@@ -186,9 +186,7 @@ class AdamOptimizer(Optimizer, tf.train.AdamOptimizer):
             v = self.get_slot(w, vn)
             mk = self._beta1_t * m + (1. - self._beta1_t) * g
             vk = self._beta2_t * v + (1. - self._beta2_t) * g * g
-            prova = tf.sqrt(vk) + self._epsilon_t
-            eps = self._epsilon_t
-            wk = w - self._lr_t * mk / (tf.sqrt(vk) + self._epsilon_t)
+            wk = w - self._lr_t * mk / (tf.sqrt(vk + self._epsilon_t))
             dynamics.extend([(w, wk), (m, mk), (v, vk)])
         b1_pow, b2_pow = self._get_beta_accumulators()
         b1_powk = b1_pow * self._beta1_t

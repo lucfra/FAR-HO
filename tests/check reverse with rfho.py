@@ -23,6 +23,7 @@ try: ss.close()
 except: pass
 tf.reset_default_graph()
 ss = tf.InteractiveSession()
+
 v1 = tf.Variable([1.,3])
 
 v2 = tf.Variable([[-1., -2], [1., 0.]])
