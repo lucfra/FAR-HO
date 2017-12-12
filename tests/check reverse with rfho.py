@@ -37,7 +37,7 @@ lmbd = far.get_hyperparameter('lambda',
 
 cost = tf.reduce_mean(v1**2) + tf.reduce_sum(lmbd*v2**2)
 
-io_optim = far.AdamOptimizer()
+io_optim = far.AdamOptimizer(epsilon=1.e-6)
 
 #io_optim = far.MomentumOptimizer(far.get_hyperparameter('eta', 0.1), far.get_hyperparameter('mu', .9))
 io_optim_dict = io_optim.minimize(cost)
