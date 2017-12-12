@@ -142,7 +142,6 @@ class Optimizer(tf.train.Optimizer):
 
 # noinspection PyClassHasNoInit,PyAbstractClass
 class GradientDescentOptimizer(Optimizer, tf.train.GradientDescentOptimizer):
-
     def apply_gradients(self, grads_and_vars, global_step=None, name=None):
         ts = super().apply_gradients(grads_and_vars, global_step, name)
         dynamics = []
@@ -185,12 +184,15 @@ class AdamOptimizer(Optimizer, tf.train.AdamOptimizer):
         for g, w in grads_and_vars:
             m = self.get_slot(w, mn)
             v = self.get_slot(w, vn)
-            b1_pow, b2_pow = self._get_beta_accumulators()
             mk = self._beta1_t * m + (1. - self._beta1_t) * g
             vk = self._beta2_t * v + (1. - self._beta2_t) * g * g
+            prova = tf.sqrt(vk) + self._epsilon_t
+            eps = self._epsilon_t
             wk = w - self._lr_t * mk / (tf.sqrt(vk) + self._epsilon_t)
-            b1_powk = b1_pow * self._beta1_t
-            b2_powk = b2_pow * self._beta2_t
-            dynamics.extend([(w, wk), (m, mk), (v, vk), (b1_pow, b1_powk), (b2_pow, b2_powk)])
+            dynamics.extend([(w, wk), (m, mk), (v, vk)])
+        b1_pow, b2_pow = self._get_beta_accumulators()
+        b1_powk = b1_pow * self._beta1_t
+        b2_powk = b2_pow * self._beta2_t
+        dynamics.extend([(b1_pow, b1_powk), (b2_pow, b2_powk)])
 
         return ts, dynamics

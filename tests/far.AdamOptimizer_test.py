@@ -3,11 +3,11 @@ import far_ho as far
 
 tf.reset_default_graph()
 
-v = tf.Variable([1., 2., 3.])
+v = tf.Variable([0., 0., 3.])
 obj = tf.reduce_sum(tf.pow(v, 2))
 
 iterations = 10
-lr = .1
+lr = .3
 
 adam = far.AdamOptimizer(lr)
 adam_dict = adam.minimize(obj)
@@ -19,7 +19,7 @@ with tf.Session().as_default() as ss:
         ss.run(adam_dict.ts)
     res = v.eval()
 
-print('far.Adam:', res)
+print('\nfar.Adam:', res)
 
 tf_adam = tf.train.AdamOptimizer(lr).minimize(obj, var_list=[v])
 

@@ -232,6 +232,8 @@ class ReverseHg(HyperGradient):
         for t in range(T_or_generator) if isinstance(T_or_generator, int) else T_or_generator:
             self._history.append(ss.run(self.iteration,
                                         feed_dict=utils.maybe_call(inner_objective_feed_dicts, t)))
+            [print(v, '->', ss.run(v)) for v in tf.global_variables()]
+            print(ss.run('add_7:0'), ss.run('Adam/epsilon:0'), '\n')
         # initialization of support variables (supports stochastic evaluation of outer objective via global_step ->
         # variable)
         ss.run(self._reverse_initializer, feed_dict=utils.maybe_call(outer_objective_feed_dicts,
