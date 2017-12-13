@@ -39,7 +39,9 @@ def get_hyperparameter(name, initializer=None, shape=None, dtype=None, collectio
 
     :return: the newly created variable, or, if `scalar` is `True` a tensor composed by scalar variables.
     """
-    _coll = HYPERPARAMETERS_COLLECTIONS + as_list(collections) if collections else []
+    _coll = HYPERPARAMETERS_COLLECTIONS
+    if collections:
+        _coll += as_list(collections)
     if not scalar:
         return tf.get_variable(name, shape, dtype, initializer, trainable=False,
                                collections=_coll)
