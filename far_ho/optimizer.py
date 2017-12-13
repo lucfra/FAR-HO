@@ -176,21 +176,35 @@ class MomentumOptimizer(Optimizer, tf.train.MomentumOptimizer):
 
 # noinspection PyClassHasNoInit
 class AdamOptimizer(Optimizer, tf.train.AdamOptimizer):
+
+    # changed the default value of epsilon  due to numerical stability of hypergradient computation
+    def __init__(self, learning_rate=0.001, beta1=0.9, beta2=0.999, epsilon=1e-5, use_locking=False, name="Adam"):
+        super().__init__(learning_rate, beta1, beta2, epsilon, use_locking, name)
+
     def apply_gradients(self, grads_and_vars, global_step=None, name=None):
         ts = super().apply_gradients(grads_and_vars, global_step, name)
 
         mn, vn = self.get_slot_names()
         dynamics = []
-        for g, w in grads_and_vars:
-            m = self.get_slot(w, mn)
-            v = self.get_slot(w, vn)
-            mk = self._beta1_t * m + (1. - self._beta1_t) * g
-            vk = self._beta2_t * v + (1. - self._beta2_t) * g * g
-            wk = w - self._lr_t * mk / (tf.sqrt(vk + self._epsilon_t)) # if epsilon outside sqrt hypergradient has nan
-            dynamics.extend([(w, wk), (m, mk), (v, vk)])
-        b1_pow, b2_pow = self._get_beta_accumulators()
-        b1_powk = b1_pow * self._beta1_t
-        b2_powk = b2_pow * self._beta2_t
-        dynamics.extend([(b1_pow, b1_powk), (b2_pow, b2_powk)])
+
+        with tf.name_scope(name, 'Adam_Dynamics'):
+            b1_pow, b2_pow = self._beta1_power, self._beta2_power
+            lr_k = self._lr_t * tf.sqrt(1. - b2_pow) / (1. - b1_pow)
+
+            for g, w in grads_and_vars:
+                m = self.get_slot(w, mn)
+                v = self.get_slot(w, vn)
+                mk = tf.add(self._beta1_t * m, (1. - self._beta1_t) * g, name=m.op.name)
+                vk = tf.add(self._beta2_t * v,  (1. - self._beta2_t) * g * g, name=v.op.name)
+
+                wk = tf.subtract(w, lr_k * mk / (tf.sqrt(vk + self._epsilon_t**2)), name=w.op.name)
+                # IMPORTANT NOTE: epsilon should be outside sqrt, but this brings to computational instability of the
+                # hypergradient.
+
+                dynamics.extend([(w, wk), (m, mk), (v, vk)])
+
+            b1_powk = b1_pow * self._beta1_t
+            b2_powk = b2_pow * self._beta2_t
+            dynamics.extend([(b1_pow, b1_powk), (b2_pow, b2_powk)])
 
         return ts, dynamics
