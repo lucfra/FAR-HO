@@ -4,7 +4,7 @@ import tensorflow as tf
 from tensorflow.python.training import slot_creator
 
 from far_ho import utils
-from far_ho.utils import dot, vectorize_all, maybe_add
+from far_ho.utils import dot, maybe_add, reduce_all_sums
 from far_ho.optimizer import OptimizerDict
 
 
@@ -260,6 +260,7 @@ class ForwardHG(HyperGradient):
         self._forward_initializer = tf.no_op()
         self._z_iter = tf.no_op()
         self._iteration = None
+        self.A_dot_zs = {}
 
     _HYPER_RANK_ERROR_MESSAGE = """
     ForwardHG: Only scalar hyperparameters accepted.\n
@@ -273,16 +274,28 @@ class ForwardHG(HyperGradient):
         # scalar_hyper_list
 
         with tf.variable_scope(outer_objective.op.name):
-            dynamics_vec = vectorize_all(optimizer_dict.dynamics)
+            # dynamics_vec = vectorize_all(optimizer_dict.dynamics)  # in the new implementation there's no need of
+            # vectorizing... it might be more efficient since it's better to avoid too many reshaping operations...
             d_oo_d_state = tf.gradients(outer_objective, optimizer_dict.state)
+
+            # d_oo_d_state = [_v if _v is not None else tf.zeros_like(_s)
+            # for _v, _s in zip(d_oo_d_state, optimizer_dict.state)]
+
             with tf.name_scope('DUMMY'):  # variables to compute forward propagation
                 # TODO avoid this computation if optimizer_dict has already been seen.
-                aux_v = [tf.ones_like(v) for v in optimizer_dict.state]
-                aux_v_vec = vectorize_all(aux_v)
-                dynamics_dot_aux_v = dot(dynamics_vec, aux_v_vec)
+                aux_v = [tf.zeros_like(v) for v in optimizer_dict.state]
+                # aux_v_vec = vectorize_all(aux_v)
+                # dynamics_dot_aux_v = dot(dynamics_vec, aux_v_vec)  # old impl
+                dynamics_dot_aux_v = reduce_all_sums(optimizer_dict.dynamics, aux_v)
+
+                der_dynamics_dot_aux_v = tf.gradients(dynamics_dot_aux_v, optimizer_dict.state)
+                # this is a list of jacobians times aux_v that have the same dimension of states variables.
+
                 init_dynamics_dot_aux_v = None
                 if optimizer_dict.init_dynamics:
-                    init_dynamics_dot_aux_v = dot(vectorize_all(optimizer_dict.init_dynamics), aux_v_vec)
+                    # init_dynamics_dot_aux_v = dot(vectorize_all(optimizer_dict.init_dynamics), aux_v_vec)  # old impl
+                    init_dynamics_dot_aux_v = reduce_all_sums(
+                        optimizer_dict.init_dynamics, aux_v)
 
             for hyp in hyper_list:
                 assert hyp.shape.ndims == 0, ForwardHG._HYPER_RANK_ERROR_MESSAGE.format(hyp, hyp.shape.ndims)
@@ -298,21 +311,29 @@ class ForwardHG(HyperGradient):
                 zs = ForwardHG._create_z(
                     optimizer_dict, hyp, None if d_init_dyn_d_hyp is None else tf.gradients(d_init_dyn_d_hyp, aux_v)
                 )
-                dyn_dot_zs = dot(dynamics_vec, vectorize_all(zs))
-                Bs = tf.gradients(d_dyn_d_hyp, aux_v)
+                # dyn_dot_zs = dot(dynamics_vec, vectorize_all(zs))
+                Bs = tf.gradients(d_dyn_d_hyp, aux_v)  # this looks right...
+                # A_dot_zs = tf.gradients(dyn_dot_zs, optimizer_dict.state)  # I guess the error is here!
+                # the error is HERE! this operation computes d Phi/ d w * z for each w instead of d Phi_i / d s * z
+                # for each i
+
+                # A_dot_zs = tf.gradients(dot(vectorize_all(der_dynamics_dot_aux_v), vectorize_all(zs)), aux_v)  # old
+                A_dot_zs = tf.gradients(reduce_all_sums(der_dynamics_dot_aux_v, zs), aux_v)
+
+                self.A_dot_zs[hyp] = A_dot_zs
+
                 _z_iter = tf.group(*[
                     z.assign(maybe_add(A_dot_z, B)) for z, A_dot_z, B
-                    in zip(zs, tf.gradients(dyn_dot_zs, optimizer_dict.state), Bs)
+                    in zip(zs, A_dot_zs, Bs)
                 ])
                 self._z_iter = tf.group(self._z_iter, _z_iter)
 
                 # HYPERGRADIENT
-                print(d_oo_d_state)
-                print(zs)
+                # d_E_T = dot(vectorize_all(d_oo_d_state), vectorize_all(zs))
                 d_E_T = [dot(d_oo_d_s, z) for d_oo_d_s, z in zip(d_oo_d_state, zs)
                          if d_oo_d_s is not None and z is not None]
-                print(d_E_T)
-                hg = maybe_add(tf.reduce_sum(d_E_T), d_oo_d_hyp)
+                hg = maybe_add(tf.reduce_sum(d_E_T), d_oo_d_hyp)  # this is right... the error is not here!
+                # hg = maybe_add(d_E_T, d_oo_d_hyp)
 
                 self._hypergrad_dictionary[hyp].append(hg)
 
@@ -332,12 +353,12 @@ class ForwardHG(HyperGradient):
             # in this case it is completely fine to keep zs into the global variable...
             return z
 
-    @property
-    def iteration(self):
-        if self._iteration is None:
-            with tf.control_dependencies(self._z_iter):
-                self._iteration = super()._init_ts()
-        return self._iteration
+    # @property
+    # def iteration(self):
+    #     if self._iteration is None:
+    #         with tf.control_dependencies([self._z_iter]):
+    #             self._iteration = super()._init_ts()
+    #     return self._iteration
 
     def run(self, T_or_generator, inner_objective_feed_dicts=None, outer_objective_feed_dicts=None,
             initializer_feed_dict=None, global_step=None, session=None, online=False):
@@ -350,4 +371,6 @@ class ForwardHG(HyperGradient):
             ss.run(self._forward_initializer)
 
         for t in range(T_or_generator) if isinstance(T_or_generator, int) else T_or_generator:
+            # ss.run()
+            ss.run(self._z_iter, utils.maybe_call(inner_objective_feed_dicts, t))
             ss.run(self.iteration, utils.maybe_call(inner_objective_feed_dicts, t))

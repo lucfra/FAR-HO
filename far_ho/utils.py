@@ -80,8 +80,13 @@ def vectorize_all(var_list, name=None):
     :param name: optional name for resulting tensor
 
     :return: vectorization of `var_list`"""
-    with tf.name_scope(name, 'Vectorization', var_list):
-        return tf.concat([tf.reshape(_w, [-1]) for _w in var_list], 0)
+    with tf.name_scope(name, 'Vectorization', var_list) as scope:
+        return tf.concat([tf.reshape(_w, [-1]) for _w in var_list], 0, name=scope)
+
+
+def reduce_all_sums(lst1, lst2, name=None):
+    with tf.name_scope(name, 'Vectorization', lst1 + lst2) as scope:
+        return tf.add_n([tf.reduce_sum(v1*v2) for v1, v2 in zip(lst1, lst2)], name=scope)
 
 
 def maybe_call(obj, *args, **kwargs):
