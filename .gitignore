@@ -1,2 +1,5 @@
 .idea/
 build/
+far_ho/examples/MNIST_DATA
+far_ho/examples/.ipynb_checkpoints
+tests/.ipynb_checkpoints
