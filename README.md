@@ -5,7 +5,7 @@ Gradient-based hyperparameter optimization package with [TensorFlow](https://www
 This is the new package that implements the algorithms presented in the paper
  _Forward and Reverse Gradient-Based Hyperparameter Optimization_
  (http://proceedings.mlr.press/v70/franceschi17a). For the older package see [RFHO](https://github.com/lucfra/RFHO). FAR-HO [features simplified interfaces, additional
-capabilities and a tighter integration with `tensorflow`](https://github.com/lucfra/FAR-HO#New-features-and-differences-from-RFHO). 
+capabilities and a tighter integration with `tensorflow`](https://github.com/lucfra/FAR-HO#new-features-and-differences-from-rfho). 
 
 - Reverse-HG, generalization of algorithms presented in Domke [2012] and MacLaurin et Al. [2015] (without reversable dynamics and "reversable dtype")
 - Forward-HG
