@@ -1,3 +1,7 @@
+"""
+Just MNIST.  Loaders for other datasets can be found at https://github.com/lucfra/ExperimentManager
+"""
+
 from far_ho.examples.datasets import Datasets, Dataset
 from far_ho.examples.utils import redivide_data
 from tensorflow.examples.tutorials.mnist.input_data import read_data_sets
