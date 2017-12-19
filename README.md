@@ -3,8 +3,7 @@
 Gradient-based hyperparameter optimization package with [TensorFlow](https://www.tensorflow.org/)
 
 This is the new package that implements the algorithms presented in the paper
- _Forward and Reverse Gradient-Based Hyperparameter Optimization_
- (http://proceedings.mlr.press/v70/franceschi17a). For the older package see [RFHO](https://github.com/lucfra/RFHO). FAR-HO [features simplified interfaces, additional
+ [_Forward and Reverse Gradient-Based Hyperparameter Optimization_](http://proceedings.mlr.press/v70/franceschi17a). For the older package see [RFHO](https://github.com/lucfra/RFHO). FAR-HO [features simplified interfaces, additional
 capabilities and a tighter integration with `tensorflow`](https://github.com/lucfra/FAR-HO#new-features-and-differences-from-rfho). 
 
 - Reverse-HG, generalization of algorithms presented in Domke [2012] and MacLaurin et Al. [2015] (without reversable dynamics and "reversable dtype")
@@ -19,6 +18,8 @@ The first two algorithms compute, with different procedures, the gradient
 "Response surface of a small neural network and optimization trajectory in the hyperparameter space.
 The arrows depicts the negative hypergradient at the current point, computed with Forward-HG algorithm.")
 
+These algorithms are useful also in a learning-to learn context where parameters of various _meta-learners_ effectively play the role of  hyperparamters, as explained here in the work [_A Bridge Between Hyperparameter Optimization and Learning-to-learn](https://arxiv.org/abs/1712.06283).
+
 ## Installation & Dependencies
 
 Clone the repository and run setup script.
@@ -29,7 +30,7 @@ cd FAR-HO
 python setup.py install
 ```
 
-Beside "usual" packages (`numpy`), FAR-HO is built upon `tensorflow`.
+Beside "usual" packages (`numpy`), FAR-HO is built upon `tensorflow`. Some examples depend on the package [`experimet_manager`](https://github.com/lucfra/ExperimentManager)
 
 Please note that required packages will not be installed automatically.
 
@@ -43,7 +44,8 @@ TensorFlow, thus making them readily applicable to deep learning systems. This o
 
 - [Self contained example](https://github.com/lucfra/FAR-HO/blob/master/far_ho/examples/Example_weighted_error(and_lr_and_w0).ipynb) on MNIST with `ReverseHG` for the optimization of initial starting point (inital weights), weights of each example and learning rate. 
 - _Coming soon_: expamples of application of online HO algorithms.
-- _Coming soon_: examples in learning-to-learn. See [A bridge between hyperparameter optimization and learning-to-Learn](http://metalearning.ml/papers/metalearn17_franceschi.pdf) presentied at [Workshop on meta-learning](http://metalearning.ml/)
+- [Hyper-representation](https://github.com/lucfra/FAR-HO/blob/master/far_ho/examples/hyper_representation.py) and related [notebook](https://github.com/lucfra/FAR-HO/blob/master/far_ho/examples/Hyper%20Representation_experiments.ipynb): an example in the context of learning-to-learn. In this case the hyperparameters are some of the weights of a convolutional neural network (plus the learning rate!). 
+The idea is to learn a cross-episode shared representation by explicitly minimizing the mean generalization error over meta-training tasks. See [A bridge between hyperparameter optimization and learning-to-Learn](https://arxiv.org/abs/1712.06283) presentied at [Workshop on meta-learning](http://metalearning.ml/). _Note_: for the moment, for running the code for this experiment you need to install the package https://github.com/lucfra/ExperimentManager for data management and statistics recording. 
 
 #### Core Steps
 
