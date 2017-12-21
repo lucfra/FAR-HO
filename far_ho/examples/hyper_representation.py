@@ -18,6 +18,8 @@ import numpy as np
 def conv_layer(net, filters=32, hyperparameter=False, activation=tf.nn.relu,
                stride=1, max_pool=True, var_coll=far.HYPERPARAMETERS_COLLECTIONS,
                conv_initialization=tf.contrib.layers.xavier_initializer_conv2d(tf.float32)):
+    max_pool_stride = [1, 2, 2, 1]
+
     bn = lambda _inp: tcl.batch_norm(_inp, variables_collections=var_coll)
 
     net + tcl.conv2d(net.out, num_outputs=filters, stride=stride,
@@ -26,7 +28,7 @@ def conv_layer(net, filters=32, hyperparameter=False, activation=tf.nn.relu,
                      variables_collections=var_coll, weights_initializer=conv_initialization)
     net + activation(net.out)
     if max_pool:
-        net + tcl.max_pool2d(net.out, kernel_size=1, padding='SAME')
+        net + tf.nn.max_pool(net.out, max_pool_stride, max_pool_stride, 'VALID')
 
 
 class HRMiniImagenetConv(models.Network):
