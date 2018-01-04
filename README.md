@@ -119,6 +119,7 @@ HO as a __constrained optimization__ problem. See the [paper](http://proceedings
 - __Additional capabilities__: set an initalizaiton dynamics and optimize the (dsitribution) of initial weights, allowed explicit dependence of the outer objective w.r.t. hyperparameters, support for multiple outer objectives and multiple inner problems (episode batching, average the sampling from distributions, ...)
 - __Tighter integration__: collections for hyperparameters and hypergradients (use `far.GraphKeys`), use out-of-the-box models (no need to vectorize the model), use any TensorFlow optimizer for the outer objective (validation error)
 - Lighter package: only code for implementing the algorithms and running the examples
+- Forward hypergradient methods have been reimplemented with a [double reverse mode trick](https://j-towns.github.io/2017/06/12/A-new-trick.html), thanks to Jamie Townsend. 
 
 ### Citing 
 
@@ -134,5 +135,17 @@ HO as a __constrained optimization__ problem. See the [paper](http://proceedings
   series = 	 {Proceedings of Machine Learning Research},
   publisher = 	 {PMLR},
   pdf = 	 {http://proceedings.mlr.press/v70/franceschi17a/franceschi17a.pdf},
+}
+```
+
+For the work on learning-to-learn
+
+
+```latex
+@article{franceschi2017bridge,
+  title={A Bridge Between Hyperparameter Optimization and Larning-to-learn},
+  author={Franceschi, Luca and Frasconi, Paolo and Donini, Michele and Pontil, Massimiliano},
+  journal={arXiv preprint arXiv:1712.06283},
+  year={2017}
 }
 ```
