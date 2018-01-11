@@ -164,10 +164,6 @@ def _records(metasets, saver, model, cond, ss, accs_and_errs, ex_name, meta_lr):
 SAVER_EXP = em.Saver.std('L2BRIDGE', 'HYPER_REPR',
                          description='standard experiment for learning meta-representations')
 
-SAVER_OTR_EXP = em.Saver.std('L2BRIDGE', 'HYPER_REPR', 'BILEVEL_ONLY_TR',
-                             description='experiment for learning meta-representations without splitting ' +
-                                         'training/validation for the ')
-
 
 def train(metasets, ex_name, hyper_repr_model_builder, classifier_builder=None, saver=None, seed=0, MBS=4,
           available_devices=('/gpu:0', '/gpu:1'),
@@ -179,7 +175,8 @@ def train(metasets, ex_name, hyper_repr_model_builder, classifier_builder=None, 
 
     :param metasets: Datasets of MetaDatasets
     :param ex_name: name of the experiment
-    :param hyper_repr_model_builder: builder for the representation model
+    :param hyper_repr_model_builder: builder for the representation model,
+                                        function (input, name) -> `experiment_manager.Network`
     :param classifier_builder: optional builder for classifier model (if None then builds a linear model)
     :param saver: experiment_manager.Saver object
     :param seed:
