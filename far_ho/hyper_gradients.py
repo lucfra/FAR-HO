@@ -357,7 +357,7 @@ class ForwardHG(HyperGradient):
     # def iteration(self):
     #     if self._iteration is None:
     #         with tf.control_dependencies([self._z_iter]):
-    #             self._iteration = super()._init_ts()
+    #             self._iteration = utils.flatten_list([opt_dict.iteration for opt_dict in sorted(self._optimizer_dicts)])
     #     return self._iteration
 
     def run(self, T_or_generator, inner_objective_feed_dicts=None, outer_objective_feed_dicts=None,

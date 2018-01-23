@@ -124,20 +124,7 @@ class Optimizer(tf.train.Optimizer):
         """
         ts, dyn = super().minimize(loss, global_step, var_list, gate_gradients, aggregation_method,
                                    colocate_gradients_with_ops, name, grad_loss)
-        # ddyn_dhypers = self._compute_ddyn_dhypers(loss, colocate_gradients_with_ops, aggregation_method,
-        #                                           gate_gradients, hyperparameters) if compute_ddyn_dhypers else None
-        return OptimizerDict(ts=ts, dynamics=dyn)  # ddyn_dhypers=ddyn_dhypers)
-
-    # def _compute_ddyn_dhypers(self, loss, colocate_gradients_with_ops=None, aggregation_method=None,
-    #                           gate_gradients=None, hyperparameters=None):
-    #     hypers = hyperparameters or tf.get_collection(GraphKeys.HYPERPARAMETERS)
-    #     assert all([hy.get_shape().ndims == 1 for hy in hypers]), 'only scalar hyperparameters for now'
-    #     grad_and_hypers = self.compute_gradients(loss, hypers, gate_gradients, aggregation_method,
-    #                                              colocate_gradients_with_ops)
-    #     # TODO filter for algorithmic hyperparameters (grad would be None here!)
-    #     return [
-    #         (tf.gradients(g, hypers, name='d_dyn_d_hypers'), v) for (g, v) in grad_and_hypers
-    #     ]
+        return OptimizerDict(ts=ts, dynamics=dyn)
 
 
 # noinspection PyClassHasNoInit,PyAbstractClass
@@ -198,8 +185,8 @@ class AdamOptimizer(Optimizer, tf.train.AdamOptimizer):
                 vk = tf.add(self._beta2_t * v,  (1. - self._beta2_t) * g * g, name=v.op.name)
 
                 wk = tf.subtract(w, lr_k * mk / (tf.sqrt(vk + self._epsilon_t**2)), name=w.op.name)
-                # IMPORTANT NOTE: epsilon should be outside sqrt, but this brings to computational instability of the
-                # hypergradient.
+                # IMPORTANT NOTE: epsilon should be outside sqrt as from the original implementation,
+                # but this brings to computational instability of the hypergradient.
 
                 dynamics.extend([(w, wk), (m, mk), (v, vk)])
 
