@@ -179,10 +179,11 @@ class HyperOptimizer:
 
     def run(self, T_or_generator, inner_objective_feed_dicts=None, outer_objective_feed_dicts=None,
             initializer_feed_dict=None, optimization_step_feed_dict=None, session=None, online=False,
-            _skip_hyper_ts=False):
+            _skip_hyper_ts=False, _only_hyper_ts=False):
         """
         Run an hyper-iteration (i.e. train the model(s) and compute hypergradients) and updates the hyperparameters.
 
+        :param _only_hyper_ts: just execute the update of the hyperparameters
         :param T_or_generator: int or generator (that yields an int), number of iteration (or stopping condition)
                                 for the inner optimization (training) dynamics
         :param inner_objective_feed_dicts: an optional feed dictionary for the inner problem. Can be a function of
@@ -201,11 +202,12 @@ class HyperOptimizer:
                             reinitialize the state after at each run).
         :param _skip_hyper_ts: if `True` does not perform hyperparameter optimization step.
         """
-        self._hypergradient.run(T_or_generator, inner_objective_feed_dicts,
-                                outer_objective_feed_dicts,
-                                initializer_feed_dict,
-                                session=session,
-                                online=online, global_step=self._global_step)
+        if not _only_hyper_ts:
+            self._hypergradient.run(T_or_generator, inner_objective_feed_dicts,
+                                    outer_objective_feed_dicts,
+                                    initializer_feed_dict,
+                                    session=session,
+                                    online=online, global_step=self._global_step)
         if not _skip_hyper_ts:
             ss = session or tf.get_default_session()
 
