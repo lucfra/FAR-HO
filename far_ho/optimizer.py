@@ -133,7 +133,7 @@ class GradientDescentOptimizer(Optimizer, tf.train.GradientDescentOptimizer):
         ts = super().apply_gradients(grads_and_vars, global_step, name)
         dynamics = []
         for g, w in grads_and_vars:
-            wk = w - self._learning_rate_tensor * g
+            wk = w - tf.cast(self._learning_rate_tensor, g.dtype) * g
             dynamics.append((w, wk))
         return ts, dynamics
 
@@ -154,8 +154,8 @@ class MomentumOptimizer(Optimizer, tf.train.MomentumOptimizer):
         dynamics = []
         for g, w in grads_and_vars:
             m = self.get_slot(w, mn)
-            mk = self._momentum_tensor * m + g
-            wk = w - self._learning_rate_tensor * mk
+            mk = tf.cast(self._momentum_tensor, m.dtype) * m + g
+            wk = w - tf.cast(self._learning_rate_tensor, mk.dtype) * mk
             dynamics.extend([(w, wk), (m, mk)])
 
         return ts, dynamics
@@ -177,6 +177,11 @@ class AdamOptimizer(Optimizer, tf.train.AdamOptimizer):
         with tf.name_scope(name, 'Adam_Dynamics'):
             b1_pow, b2_pow = self._beta1_power, self._beta2_power
             lr_k = self._lr_t * tf.sqrt(1. - b2_pow) / (1. - b1_pow)
+
+            lr_k = tf.cast(lr_k, grads_and_vars[0][0].dtype)
+            self._beta1_t = tf.cast(self._beta1_t, grads_and_vars[0][0].dtype)
+            self._beta2_t = tf.cast(self._beta2_t, grads_and_vars[0][0].dtype)
+            self._epsilon_t = tf.cast(self._epsilon_t, grads_and_vars[0][0].dtype)
 
             for g, w in grads_and_vars:
                 m = self.get_slot(w, mn)

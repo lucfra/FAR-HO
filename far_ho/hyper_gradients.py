@@ -1,11 +1,15 @@
 from collections import defaultdict
 
+import sys
 import tensorflow as tf
 from tensorflow.python.training import slot_creator
 
 from far_ho import utils
 from far_ho.utils import dot, maybe_add, reduce_all_sums
 from far_ho.optimizer import OptimizerDict
+
+
+RAISE_ERROR_ON_DETACHED = False
 
 
 class HyperGradient:
@@ -304,8 +308,12 @@ class ForwardHG(HyperGradient):
                     tf.gradients(init_dynamics_dot_aux_v, hyp)[0]
                 d_dyn_d_hyp = tf.gradients(dynamics_dot_aux_v, hyp)[0]
                 d_oo_d_hyp = tf.gradients(outer_objective, hyp)[0]
-                assert d_init_dyn_d_hyp is not None or d_dyn_d_hyp is not None or\
-                    d_oo_d_hyp is not None, HyperGradient._ERROR_HYPER_DETACHED.format(hyp)
+                if RAISE_ERROR_ON_DETACHED:
+                    assert d_init_dyn_d_hyp is not None or d_dyn_d_hyp is not None or\
+                        d_oo_d_hyp is not None, HyperGradient._ERROR_HYPER_DETACHED.format(hyp)
+                else:
+                    print( HyperGradient._ERROR_HYPER_DETACHED.format(hyp), file=sys.stderr)
+                    hyper_list.remove(hyp)
 
                 # UPDATE OF TOTAL DERIVATIVE OF STATE W.R.T. HYPERPARAMETER
                 zs = ForwardHG._create_z(
