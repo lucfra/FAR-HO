@@ -18,7 +18,7 @@ The first two algorithms compute, with different procedures, the gradient
 "Response surface of a small neural network and optimization trajectory in the hyperparameter space.
 The arrows depicts the negative hypergradient at the current point, computed with Forward-HG algorithm.")
 
-These algorithms are useful also in a learning-to learn context where parameters of various _meta-learners_ effectively play the role of  hyperparamters, as explained here in the work [_A Bridge Between Hyperparameter Optimization and Learning-to-learn](https://arxiv.org/abs/1712.06283).
+These algorithms are useful also in a learning-to learn context where parameters of various _meta-learners_ effectively play the role of  hyperparamters, as explained here in the work [_A Bridge Between Hyperparameter Optimization and Learning-to-learn_](https://arxiv.org/abs/1712.06283).
 
 ## Installation & Dependencies
 
