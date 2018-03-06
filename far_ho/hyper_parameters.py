@@ -1,3 +1,6 @@
+from __future__ import absolute_import, print_function, division
+
+
 from collections import defaultdict
 # from functools import reduce
 
@@ -28,7 +31,7 @@ def get_hyperparameter(name, initializer=None, shape=None, dtype=None, collectio
     and HYPERPARAMETER. Mirrors the behavior of `tf.get_variable`.
 
     :param name: name of this hyperparameter
-    :param initializer: initializer or initial value (can be np.array or float)
+    :param initializer: initializer or initial value (can be also np.array or float)
     :param shape: optional shape, may be not needed depending on initializer
     :param dtype: optional type,  may be not needed depending on initializer
     :param collections: optional additional collection or list of collections, which will be added to
@@ -62,7 +65,7 @@ def get_hyperparameter(name, initializer=None, shape=None, dtype=None, collectio
         return tf.convert_to_tensor(_tmp_lst.tolist(), name=name)
 
 
-class HyperOptimizer:
+class HyperOptimizer(object):
     """
     Wrapper for performing hyperparameter optimization
     """
@@ -133,13 +136,13 @@ class HyperOptimizer:
 
     def finalize(self, aggregation_fn=None, process_fn=None):
         """
-        To be called when no more dynamics or problems are added, computes the updates
-        for the hyperparameters. This is to behave nicely with global_variables_initializer.
+        To be called when no more dynamics or problems will be added, computes the updates
+        for the hyperparameters. This behave nicely with global_variables_initializer.
 
         :param aggregation_fn: Optional operation to aggregate multiple hypergradients (for the same hyperparameter),
-                                by default reduce_mean
-        :param process_fn: Optional operation like clipping to be applied to hypergradients before performing
-                            a descent step.
+                                by (default: reduce_mean)
+        :param process_fn: Optional operation like normalizing to be applied to hypergradients before performing
+                            a descent step (default: nothing).
 
         :return: the run method of this object.
         """
@@ -156,7 +159,7 @@ class HyperOptimizer:
                 with tf.control_dependencies([self._fin_hts]):
                     self._fin_hts = self._global_step.assign_add(1).op
         else:
-            print('HyperOptimizer: WARNING, finalize has already been called on this object, ' +
+            print('HyperOptimizer WARNING:, finalize has already been called on this object, ' +
                   'further calls have no effect', file=sys.stderr)
         return self.run
 

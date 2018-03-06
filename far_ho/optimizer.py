@@ -1,9 +1,10 @@
+from __future__ import print_function, absolute_import, division
+
 import tensorflow as tf
 from collections import OrderedDict
 
 
-class OptimizerDict:
-
+class OptimizerDict(object):
     def __init__(self, ts, dynamics):
         self._ts = ts
         self._dynamics = dynamics
@@ -122,15 +123,15 @@ class Optimizer(tf.train.Optimizer):
 
         See tf.train.Optimizer.minimize.  Adds the computation of B_t if forward_hg is `True`
         """
-        ts, dyn = super().minimize(loss, global_step, var_list, gate_gradients, aggregation_method,
-                                   colocate_gradients_with_ops, name, grad_loss)
+        ts, dyn = super(Optimizer, self).minimize(loss, global_step, var_list, gate_gradients, aggregation_method,
+                                                  colocate_gradients_with_ops, name, grad_loss)
         return OptimizerDict(ts=ts, dynamics=dyn)
 
 
 # noinspection PyClassHasNoInit,PyAbstractClass
 class GradientDescentOptimizer(Optimizer, tf.train.GradientDescentOptimizer):
     def apply_gradients(self, grads_and_vars, global_step=None, name=None):
-        ts = super().apply_gradients(grads_and_vars, global_step, name)
+        ts = super(GradientDescentOptimizer, self).apply_gradients(grads_and_vars, global_step, name)
         dynamics = []
         for g, w in grads_and_vars:
             wk = w - tf.cast(self._learning_rate_tensor, g.dtype) * g
@@ -142,12 +143,12 @@ class MomentumOptimizer(Optimizer, tf.train.MomentumOptimizer):
     def __init__(self, learning_rate, momentum, use_locking=False, name="Momentum",
                  use_nesterov=False):
         assert use_nesterov is False, 'Nesterov momentum not implemented yet...'
-        super().__init__(learning_rate, momentum, use_locking, name, use_nesterov)
+        super(MomentumOptimizer, self).__init__(learning_rate, momentum, use_locking, name, use_nesterov)
 
     def apply_gradients(self, grads_and_vars, global_step=None, name=None):
         #         filter_hypers
 
-        ts = super().apply_gradients(grads_and_vars, global_step, name)
+        ts = super(MomentumOptimizer, self).apply_gradients(grads_and_vars, global_step, name)
 
         # builds up the dynamics here
         mn = self.get_slot_names()[0]
@@ -163,13 +164,12 @@ class MomentumOptimizer(Optimizer, tf.train.MomentumOptimizer):
 
 # noinspection PyClassHasNoInit
 class AdamOptimizer(Optimizer, tf.train.AdamOptimizer):
-
     # changed the default value of epsilon  due to numerical stability of hypergradient computation
     def __init__(self, learning_rate=0.001, beta1=0.9, beta2=0.999, epsilon=1e-5, use_locking=False, name="Adam"):
-        super().__init__(learning_rate, beta1, beta2, epsilon, use_locking, name)
+        super(AdamOptimizer, self).__init__(learning_rate, beta1, beta2, epsilon, use_locking, name)
 
     def apply_gradients(self, grads_and_vars, global_step=None, name=None):
-        ts = super().apply_gradients(grads_and_vars, global_step, name)
+        ts = super(AdamOptimizer, self).apply_gradients(grads_and_vars, global_step, name)
 
         mn, vn = self.get_slot_names()
         dynamics = []
@@ -187,9 +187,9 @@ class AdamOptimizer(Optimizer, tf.train.AdamOptimizer):
                 m = self.get_slot(w, mn)
                 v = self.get_slot(w, vn)
                 mk = tf.add(self._beta1_t * m, (1. - self._beta1_t) * g, name=m.op.name)
-                vk = tf.add(self._beta2_t * v,  (1. - self._beta2_t) * g * g, name=v.op.name)
+                vk = tf.add(self._beta2_t * v, (1. - self._beta2_t) * g * g, name=v.op.name)
 
-                wk = tf.subtract(w, lr_k * mk / (tf.sqrt(vk + self._epsilon_t**2)), name=w.op.name)
+                wk = tf.subtract(w, lr_k * mk / (tf.sqrt(vk + self._epsilon_t ** 2)), name=w.op.name)
                 # IMPORTANT NOTE: epsilon should be outside sqrt as from the original implementation,
                 # but this brings to computational instability of the hypergradient.
 

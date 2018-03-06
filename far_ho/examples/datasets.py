@@ -1,4 +1,8 @@
+from __future__ import absolute_import, print_function, division
+
+
 import numpy as np
+from far_ho import utils
 
 
 def maybe_cast_to_scalar(what):
@@ -158,7 +162,7 @@ class Dataset:
             :param step: unused, just for making it compatible with `HG` and `Saver`
             :return: the feed dictionary
             """
-            return {**{x: self.data, y: self.target}, **other_feeds}
+            return utils.merge_dicts({x: self.data, y: self.target}, other_feeds)
 
         if name:
             NAMED_SUPPLIER[name] = _supplier

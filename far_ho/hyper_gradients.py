@@ -1,3 +1,6 @@
+from __future__ import absolute_import, print_function, division
+
+
 from collections import defaultdict
 
 import sys
@@ -12,7 +15,7 @@ from far_ho.optimizer import OptimizerDict
 RAISE_ERROR_ON_DETACHED = False
 
 
-class HyperGradient:
+class HyperGradient(object):
     def __init__(self):
         self._optimizer_dicts = set()
         self._hypergrad_dictionary = defaultdict(lambda: [])  # dictionary (hyperarameter, list of hypergradients)
@@ -121,7 +124,7 @@ class HyperGradient:
 
 class ReverseHg(HyperGradient):
     def __init__(self, history=None):
-        super().__init__()
+        super(ReverseHg, self).__init__()
         self._alpha_iter = tf.no_op()
         self._reverse_initializer = tf.no_op()
         self._history = history or []
@@ -142,7 +145,7 @@ class ReverseHg(HyperGradient):
 
         :return: list of hyperparameters involved in the computation
         """
-        hyper_list = super().compute_gradients(outer_objective, optimizer_dict, hyper_list)
+        hyper_list = super(ReverseHg, self).compute_gradients(outer_objective, optimizer_dict, hyper_list)
 
         # derivative of outer objective w.r.t. state
         with tf.variable_scope(outer_objective.op.name):  # for some reason without this there is a cathastrofic
@@ -228,7 +231,7 @@ class ReverseHg(HyperGradient):
 
         ss = session or tf.get_default_session()
 
-        self._history.clear()
+        self._history = []
         if not online:
             self._history.append(ss.run(self.initialization, feed_dict=utils.maybe_call(
                 initializer_feed_dict, utils.maybe_eval(global_step, ss))))
@@ -260,7 +263,7 @@ class UnrolledReverseHG(HyperGradient):
 
 class ForwardHG(HyperGradient):
     def __init__(self):
-        super().__init__()
+        super(ForwardHG, self).__init__()
         self._forward_initializer = tf.no_op()
         self._z_iter = tf.no_op()
         self._iteration = None
@@ -273,7 +276,7 @@ class ForwardHG(HyperGradient):
     """
 
     def compute_gradients(self, outer_objective, optimizer_dict, hyper_list=None):
-        hyper_list = super().compute_gradients(outer_objective, optimizer_dict, hyper_list)
+        hyper_list = super(ForwardHG, self).compute_gradients(outer_objective, optimizer_dict, hyper_list)
 
         # scalar_hyper_list
 
@@ -312,7 +315,7 @@ class ForwardHG(HyperGradient):
                     assert d_init_dyn_d_hyp is not None or d_dyn_d_hyp is not None or\
                         d_oo_d_hyp is not None, HyperGradient._ERROR_HYPER_DETACHED.format(hyp)
                 else:
-                    print( HyperGradient._ERROR_HYPER_DETACHED.format(hyp), file=sys.stderr)
+                    print(HyperGradient._ERROR_HYPER_DETACHED.format(hyp), file=sys.stderr)
                     hyper_list.remove(hyp)
 
                 # UPDATE OF TOTAL DERIVATIVE OF STATE W.R.T. HYPERPARAMETER
@@ -365,7 +368,8 @@ class ForwardHG(HyperGradient):
     # def iteration(self):
     #     if self._iteration is None:
     #         with tf.control_dependencies([self._z_iter]):
-    #             self._iteration = utils.flatten_list([opt_dict.iteration for opt_dict in sorted(self._optimizer_dicts)])
+    #             self._iteration = utils.flatten_list(
+    # [opt_dict.iteration for opt_dict in sorted(self._optimizer_dicts)])
     #     return self._iteration
 
     def run(self, T_or_generator, inner_objective_feed_dicts=None, outer_objective_feed_dicts=None,

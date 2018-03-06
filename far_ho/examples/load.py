@@ -1,6 +1,7 @@
 """
 Just MNIST.  Loaders for other datasets can be found at https://github.com/lucfra/ExperimentManager
 """
+from __future__ import absolute_import, print_function, division
 
 from far_ho.examples.datasets import Datasets, Dataset
 from far_ho.examples.utils import redivide_data

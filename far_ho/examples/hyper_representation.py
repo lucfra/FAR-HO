@@ -1,3 +1,6 @@
+from __future__ import absolute_import, print_function, division
+
+
 import sys
 from functools import reduce
 
@@ -37,7 +40,7 @@ class HRMiniImagenetConv(models.Network):
                  conv_block=conv_layer, reuse=False):
         self.conv_block = conv_block
 
-        super().__init__(_input, name, False, reuse=reuse)
+        super(HRMiniImagenetConv, self).__init__(_input, name, False, reuse=reuse)
 
         # variables from batch normalization
         self.betas = self.filter_vars('beta')
@@ -45,12 +48,14 @@ class HRMiniImagenetConv(models.Network):
         self.moving_means = self.filter_vars('moving_mean')
         self.moving_variances = self.filter_vars('moving_variance')
 
-        if not reuse:
-            far.utils.remove_from_collection(far.GraphKeys.MODEL_VARIABLES, *self.moving_means, *self.moving_variances)
+        if not reuse:  # these calls might print a warning... it's not a problem..
+            far.utils.remove_from_collection(far.GraphKeys.MODEL_VARIABLES, *self.moving_means)
+            far.utils.remove_from_collection(far.GraphKeys.MODEL_VARIABLES, *self.moving_variances)
         # moving mean and averages are really poorly managed with tf....
         # would be the best to avoid using batch normalization altogether
         # remove moving avarages from hyperparameter collections (looks like there is no other way......)
-        far.utils.remove_from_collection(far.GraphKeys.HYPERPARAMETERS, *self.moving_means, *self.moving_variances)
+        far.utils.remove_from_collection(far.GraphKeys.HYPERPARAMETERS, *self.moving_means)
+        far.utils.remove_from_collection(far.GraphKeys.HYPERPARAMETERS, *self.moving_variances)
         print(name, 'MODEL CREATED')
 
     def for_input(self, new_input):

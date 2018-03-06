@@ -1,3 +1,5 @@
+from __future__ import absolute_import, print_function, division
+
 import tensorflow as tf
 import sys
 # noinspection PyUnresolvedReferences
@@ -13,7 +15,13 @@ except ImportError:
 
     def merge_dicts(*dicts):
         from functools import reduce
-        return reduce(lambda a, nd: {**a, **nd}, dicts, {})
+        return reduce(lambda a, nd: merge_two_dicts(a, nd), dicts, {})
+
+
+    def merge_two_dicts(x, y):
+        z = x.copy()  # start with x's keys and values
+        z.update(y)  # modifies z with y's keys and values & returns None
+        return z
 
 
     def as_list(obj):
@@ -102,12 +110,14 @@ def dot(a, b, name=None):
     """
     Dot product between vectors `a` and `b` with optional name
     """
+    assert a.shape.ndims == 1, '{} must be a vector'.format(a)
+    assert b.shape.ndims == 1, '{} must be a vector'.format(b)
     with tf.name_scope(name, 'Dot', [a, b]):
         return tf.reduce_sum(a*b)
 
 
 def _check():
-    print(4)
+    print(5)
 
 
 def maybe_eval(a, ss=None):
