@@ -7,28 +7,30 @@ try:
     from experiment_manager.utils import *
 except ImportError:
     # print('package experiment_manager not found')
-
-    def flatten_list(lst):
-        from itertools import chain
-        return list(chain(*lst))
+    pass
 
 
-    def merge_dicts(*dicts):
-        from functools import reduce
-        return reduce(lambda a, nd: merge_two_dicts(a, nd), dicts, {})
+def flatten_list(lst):
+    from itertools import chain
+    return list(chain(*lst))
 
 
-    def merge_two_dicts(x, y):
-        z = x.copy()  # start with x's keys and values
-        z.update(y)  # modifies z with y's keys and values & returns None
-        return z
+def merge_dicts(*dicts):
+    from functools import reduce
+    return reduce(lambda a, nd: merge_two_dicts(a, nd), dicts, {})
 
 
-    def as_list(obj):
-        """
-        Makes sure `obj` is a list or otherwise converts it to a list with a single element.
-        """
-        return obj if isinstance(obj, list) else [obj]
+def merge_two_dicts(x, y):
+    z = x.copy()  # start with x's keys and values
+    z.update(y)  # modifies z with y's keys and values & returns None
+    return z
+
+
+def as_list(obj):
+    """
+    Makes sure `obj` is a list or otherwise converts it to a list with a single element.
+    """
+    return obj if isinstance(obj, list) else [obj]
 
 
 # noinspection PyClassHasNoInit
@@ -108,10 +110,11 @@ def maybe_call(obj, *args, **kwargs):
 
 def dot(a, b, name=None):
     """
-    Dot product between vectors `a` and `b` with optional name
+    Dot product between vectors `a` and `b` with optional name.
+    If a and b are not vectors, formally this computes <vec(a), vec(b)>.
     """
-    assert a.shape.ndims == 1, '{} must be a vector'.format(a)
-    assert b.shape.ndims == 1, '{} must be a vector'.format(b)
+    # assert a.shape.ndims == 1, '{} must be a vector'.format(a)
+    # assert b.shape.ndims == 1, '{} must be a vector'.format(b)
     with tf.name_scope(name, 'Dot', [a, b]):
         return tf.reduce_sum(a*b)
 

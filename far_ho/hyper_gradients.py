@@ -1,6 +1,5 @@
 from __future__ import absolute_import, print_function, division
 
-
 from collections import defaultdict
 
 import sys
@@ -10,7 +9,6 @@ from tensorflow.python.training import slot_creator
 from far_ho import utils
 from far_ho.utils import dot, maybe_add, reduce_all_sums
 from far_ho.optimizer import OptimizerDict
-
 
 RAISE_ERROR_ON_DETACHED = False
 
@@ -311,12 +309,19 @@ class ForwardHG(HyperGradient):
                     tf.gradients(init_dynamics_dot_aux_v, hyp)[0]
                 d_dyn_d_hyp = tf.gradients(dynamics_dot_aux_v, hyp)[0]
                 d_oo_d_hyp = tf.gradients(outer_objective, hyp)[0]
+
+                # ------------------------------------------------------------
+                # check detached hyperparameters (for which hypergradient would be always null)
+                hyper_ok = d_init_dyn_d_hyp is not None or d_dyn_d_hyp is not None or d_oo_d_hyp is not None
                 if RAISE_ERROR_ON_DETACHED:
-                    assert d_init_dyn_d_hyp is not None or d_dyn_d_hyp is not None or\
-                        d_oo_d_hyp is not None, HyperGradient._ERROR_HYPER_DETACHED.format(hyp)
+                    # try:
+                    assert hyper_ok, HyperGradient._ERROR_HYPER_DETACHED.format(hyp)
+                    # ex
                 else:
-                    print(HyperGradient._ERROR_HYPER_DETACHED.format(hyp), file=sys.stderr)
-                    hyper_list.remove(hyp)
+                    if not hyper_ok:
+                        print(HyperGradient._ERROR_HYPER_DETACHED.format(hyp), file=sys.stderr)
+                        hyper_list.remove(hyp)
+                # -------------------------------------------------------------
 
                 # UPDATE OF TOTAL DERIVATIVE OF STATE W.R.T. HYPERPARAMETER
                 zs = ForwardHG._create_z(
@@ -355,7 +360,7 @@ class ForwardHG(HyperGradient):
 
     @staticmethod
     def _create_z(optimizer_dict, hyper, d_init_dynamics_d_hyper):
-        if d_init_dynamics_d_hyper is None: d_init_dynamics_d_hyper = [None]*len(optimizer_dict.state)
+        if d_init_dynamics_d_hyper is None: d_init_dynamics_d_hyper = [None] * len(optimizer_dict.state)
         with tf.variable_scope('Z'):
             z = [slot_creator.create_slot(v, utils.val_or_zero(der, v), hyper.op.name) for v, der
                  in zip(optimizer_dict.state, d_init_dynamics_d_hyper)]
