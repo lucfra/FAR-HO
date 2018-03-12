@@ -18,6 +18,7 @@ class HyperGradient(object):
         self._optimizer_dicts = set()
         self._hypergrad_dictionary = defaultdict(lambda: [])  # dictionary (hyperarameter, list of hypergradients)
         self._ts = None
+        self.inner_losses = []
 
     _ERROR_NOT_OPTIMIZER_DICT = """
     Looks like {} is not an `OptimizerDict`. Use optimizers in far_ho.optimizers for obtaining an OptimizerDict.
@@ -64,7 +65,7 @@ class HyperGradient(object):
         return self._ts
 
     def run(self, T_or_generator, inner_objective_feed_dicts=None, outer_objective_feed_dicts=None,
-            initializer_feed_dict=None, global_step=None, session=None, online=False):
+            initializer_feed_dict=None, global_step=None, session=None, online=False, inner_objective=None):
         """
         Runs the inner optimization dynamics for T iterations (T_or_generator can be indeed a generator) and computes
         in the meanwhile.
@@ -80,6 +81,8 @@ class HyperGradient(object):
         :param session: Optional session (otherwise will take the default session)
         :param online: Performs the computation of the hypergradient in the online (or "real time") mode. Note that
                         `ReverseHG` and `ForwardHG` behave differently.
+        :param inner_objective: Tensor, inner objective will be evaluated for all the T iterations
+                                and its values will be stored in self.inner_losses
 
         """
         raise NotImplementedError()
@@ -225,18 +228,26 @@ class ReverseHg(HyperGradient):
             yield t, {v: his[k] for k, v in enumerate(state)}
 
     def run(self, T_or_generator, inner_objective_feed_dicts=None, outer_objective_feed_dicts=None,
-            initializer_feed_dict=None, global_step=None, session=None, online=False):
+            initializer_feed_dict=None, global_step=None, session=None, online=False, inner_objective=None):
 
         ss = session or tf.get_default_session()
 
         self._history = []
         if not online:
+            self.inner_losses = []
             self._history.append(ss.run(self.initialization, feed_dict=utils.maybe_call(
                 initializer_feed_dict, utils.maybe_eval(global_step, ss))))
 
         for t in range(T_or_generator) if isinstance(T_or_generator, int) else T_or_generator:
-            self._history.append(ss.run(self.iteration,
-                                        feed_dict=utils.maybe_call(inner_objective_feed_dicts, t)))
+            s_t, inner_loss = ss.run([self.iteration, inner_objective],
+                                     feed_dict=utils.maybe_call(inner_objective_feed_dicts, t))
+
+            self.inner_losses.append(inner_loss)
+            self._history.append(s_t)
+
+        #self.inner_losses.append(ss.run(inner_objective, feed_dict=utils.maybe_call(inner_objective_feed_dicts, t)))
+
+
         # initialization of support variables (supports stochastic evaluation of outer objective via global_step ->
         # variable)
         ss.run(self._reverse_initializer, feed_dict=utils.maybe_call(outer_objective_feed_dicts,
@@ -253,7 +264,7 @@ class ReverseHg(HyperGradient):
 
 class UnrolledReverseHG(HyperGradient):
     def run(self, T_or_generator, inner_objective_feed_dicts=None, outer_objective_feed_dicts=None,
-            initializer_feed_dict=None, global_step=None, session=None, online=False):
+            initializer_feed_dict=None, global_step=None, session=None, online=False, inner_objective=None):
         return NotImplemented()
 
         # maybe... it would require a certain effort...
@@ -378,7 +389,7 @@ class ForwardHG(HyperGradient):
     #     return self._iteration
 
     def run(self, T_or_generator, inner_objective_feed_dicts=None, outer_objective_feed_dicts=None,
-            initializer_feed_dict=None, global_step=None, session=None, online=False):
+            initializer_feed_dict=None, global_step=None, session=None, online=False, inner_objective=None):
 
         ss = session or tf.get_default_session()
 
@@ -386,8 +397,10 @@ class ForwardHG(HyperGradient):
             ss.run(self.initialization, feed_dict=utils.maybe_call(
                 initializer_feed_dict, utils.maybe_eval(global_step, ss)))
             ss.run(self._forward_initializer)
+            self.inner_losses = []
 
         for t in range(T_or_generator) if isinstance(T_or_generator, int) else T_or_generator:
             # ss.run()
             ss.run(self._z_iter, utils.maybe_call(inner_objective_feed_dicts, t))
-            ss.run(self.iteration, utils.maybe_call(inner_objective_feed_dicts, t))
+            _, inner_loss = ss.run([self.iteration, inner_objective], utils.maybe_call(inner_objective_feed_dicts, t))
+            self.inner_losses.append(inner_loss)

@@ -71,11 +71,15 @@ class HyperOptimizer(object):
     """
 
     def __init__(self, hypergradient=None):
+        self.inner_objective = None
         assert hypergradient is None or isinstance(hypergradient, HyperGradient)
         self._hypergradient = hypergradient or ReverseHg()
         self._fin_hts = None
         self._global_step = None
         self._h_optim_dict = defaultdict(lambda: OrderedSet())
+
+        self.inner_objective = None
+        self.inner_losses = []
 
     # noinspection PyMethodMayBeStatic
     def inner_problem(self, inner_objective, inner_objective_optimizer, var_list=None, init_dynamics_dict=None,
@@ -98,6 +102,7 @@ class HyperOptimizer(object):
             var_list=var_list,
             **minimize_kwargs
         )
+        self.inner_objective = inner_objective
         if init_dynamics_dict:
             optim_dict.set_init_dynamics(init_dynamics_dict)
         return optim_dict
@@ -206,11 +211,16 @@ class HyperOptimizer(object):
         :param _skip_hyper_ts: if `True` does not perform hyperparameter optimization step.
         """
         if not _only_hyper_ts:
+            if not online:
+                self.inner_losses = []
             self._hypergradient.run(T_or_generator, inner_objective_feed_dicts,
                                     outer_objective_feed_dicts,
                                     initializer_feed_dict,
                                     session=session,
-                                    online=online, global_step=self._global_step)
+                                    online=online, global_step=self._global_step,
+                                    inner_objective=self.inner_objective)
+            self.inner_losses = self._hypergradient.inner_losses
+
         if not _skip_hyper_ts:
             ss = session or tf.get_default_session()
 
