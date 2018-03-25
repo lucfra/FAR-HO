@@ -206,3 +206,13 @@ def binary_cross_entropy(labels, logits, linear_input=True, eps=1.e-5, name='bin
 
 
 # TODO put some other useful errors (with mean and so on) and scores, and add them to correct collections...
+def maybe_track_tensor(iter_op, tensor):
+    """
+    :return: a list of ops to run and a boolean that is true if tensor was actually a tensor to be tracked
+    """
+    to_be_run = [iter_op]
+    track_tensor = isinstance(tensor, tf.Tensor)
+    if track_tensor:  # in most cases this check should be fine
+        with tf.control_dependencies([iter_op]):  # be sure that tensor is computed AFTER the (optimization) iteration
+            to_be_run.append(tf.identity(tensor))
+    return to_be_run, track_tensor

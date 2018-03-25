@@ -1,14 +1,14 @@
 from __future__ import absolute_import, print_function, division
 
+import sys
 from collections import defaultdict
 
-import sys
 import tensorflow as tf
 from tensorflow.python.training import slot_creator
 
 from far_ho import utils
-from far_ho.utils import dot, maybe_add, reduce_all_sums
 from far_ho.optimizer import OptimizerDict
+from far_ho.utils import dot, maybe_add, reduce_all_sums
 
 RAISE_ERROR_ON_DETACHED = False
 
@@ -54,6 +54,10 @@ class HyperGradient(object):
     @property
     def iteration(self):
         return utils.flatten_list([opt_dict.iteration for opt_dict in sorted(self._optimizer_dicts)])
+
+    @property
+    def state(self):
+        return utils.flatten_list([opt_dict.state for opt_dict in sorted(self._optimizer_dicts)])
 
     def _init_ts(self):
         return tf.group(*[opt_dict.ts for opt_dict in sorted(self._optimizer_dicts)])
@@ -170,7 +174,7 @@ class ReverseHg(HyperGradient):
             else:
                 alpha_dot_B0 = [None] * len(hyper_list)
 
-            # here is some of this is None it may mean that the hyperparameter compares inside phi_0: check that and
+            # here, if some of this is None it may mean that the hyperparameter compares inside phi_0: check that and
             # if it is not the case return error...
             hyper_grad_vars, hyper_grad_step = [], tf.no_op()
             for dl_dh, doo_dh, a_d_b0, hyper in zip(alpha_dot_B, doo_dypers, alpha_dot_B0, hyper_list):
@@ -238,15 +242,19 @@ class ReverseHg(HyperGradient):
             self._history.append(ss.run(self.initialization, feed_dict=utils.maybe_call(
                 initializer_feed_dict, utils.maybe_eval(global_step, ss))))
 
+        else:
+            self._history.append(ss.run(self.state))
+
+        # optionally may track inner objective (to check for divergence)
+        to_be_run, track_loss = utils.maybe_track_tensor(self.iteration, inner_objective)
+
         for t in range(T_or_generator) if isinstance(T_or_generator, int) else T_or_generator:
-            s_t, inner_loss = ss.run([self.iteration, inner_objective],
-                                     feed_dict=utils.maybe_call(inner_objective_feed_dicts, t))
+            _res = ss.run(to_be_run, feed_dict=utils.maybe_call(inner_objective_feed_dicts, t))
 
-            self.inner_losses.append(inner_loss)
-            self._history.append(s_t)
-
-        #self.inner_losses.append(ss.run(inner_objective, feed_dict=utils.maybe_call(inner_objective_feed_dicts, t)))
-
+            if track_loss:
+                self._history.append(_res[0])
+                self.inner_losses.append(_res[1])
+            self._history.append(_res)
 
         # initialization of support variables (supports stochastic evaluation of outer objective via global_step ->
         # variable)
@@ -255,7 +263,7 @@ class ReverseHg(HyperGradient):
         for pt, state_feed_dict in self._state_feed_dict_generator(reversed(self._history[:-1])):
             # this should be fine also for truncated reverse... but check again the index t
             t = len(self._history) - pt - 2  # if T is int then len(self.history) is T + 1 and this numerator
-            # shall start at T-1  (99.99 sure its correct)
+            # shall start at T-1
             ss.run(self._alpha_iter,
                    feed_dict=utils.merge_dicts(state_feed_dict,
                                                utils.maybe_call(inner_objective_feed_dicts, t)
@@ -294,24 +302,19 @@ class ForwardHG(HyperGradient):
             # vectorizing... it might be more efficient since it's better to avoid too many reshaping operations...
             d_oo_d_state = tf.gradients(outer_objective, optimizer_dict.state)
 
-            # d_oo_d_state = [_v if _v is not None else tf.zeros_like(_s)
-            # for _v, _s in zip(d_oo_d_state, optimizer_dict.state)]
-
             with tf.name_scope('DUMMY'):  # variables to compute forward propagation
                 # TODO avoid this computation if optimizer_dict has already been seen.
-                aux_v = [tf.zeros_like(v) for v in optimizer_dict.state]
-                # aux_v_vec = vectorize_all(aux_v)
-                # dynamics_dot_aux_v = dot(dynamics_vec, aux_v_vec)  # old impl
-                dynamics_dot_aux_v = reduce_all_sums(optimizer_dict.dynamics, aux_v)
+                aux_vs = [tf.zeros_like(v) for v in optimizer_dict.state]
+                dynamics_dot_aux_v = reduce_all_sums(optimizer_dict.dynamics, aux_vs)
 
                 der_dynamics_dot_aux_v = tf.gradients(dynamics_dot_aux_v, optimizer_dict.state)
-                # this is a list of jacobians times aux_v that have the same dimension of states variables.
+                # this is a list of jacobians times aux_vs that have the same dimension of states variables.
 
                 init_dynamics_dot_aux_v = None
                 if optimizer_dict.init_dynamics:
                     # init_dynamics_dot_aux_v = dot(vectorize_all(optimizer_dict.init_dynamics), aux_v_vec)  # old impl
                     init_dynamics_dot_aux_v = reduce_all_sums(
-                        optimizer_dict.init_dynamics, aux_v)
+                        optimizer_dict.init_dynamics, aux_vs)
 
             for hyp in hyper_list:
                 assert hyp.shape.ndims == 0, ForwardHG._HYPER_RANK_ERROR_MESSAGE.format(hyp, hyp.shape.ndims)
@@ -335,17 +338,12 @@ class ForwardHG(HyperGradient):
                 # -------------------------------------------------------------
 
                 # UPDATE OF TOTAL DERIVATIVE OF STATE W.R.T. HYPERPARAMETER
-                zs = ForwardHG._create_z(
-                    optimizer_dict, hyp, None if d_init_dyn_d_hyp is None else tf.gradients(d_init_dyn_d_hyp, aux_v)
-                )
-                # dyn_dot_zs = dot(dynamics_vec, vectorize_all(zs))
-                Bs = tf.gradients(d_dyn_d_hyp, aux_v)  # this looks right...
-                # A_dot_zs = tf.gradients(dyn_dot_zs, optimizer_dict.state)  # I guess the error is here!
-                # the error is HERE! this operation computes d Phi/ d w * z for each w instead of d Phi_i / d s * z
-                # for each i
+                zs = ForwardHG._create_zs(
+                    optimizer_dict, hyp, None if d_init_dyn_d_hyp is None else tf.gradients(d_init_dyn_d_hyp, aux_vs)
+                )  # this is one z for each variable
+                Bs = tf.gradients(d_dyn_d_hyp, aux_vs)
 
-                # A_dot_zs = tf.gradients(dot(vectorize_all(der_dynamics_dot_aux_v), vectorize_all(zs)), aux_v)  # old
-                A_dot_zs = tf.gradients(reduce_all_sums(der_dynamics_dot_aux_v, zs), aux_v)
+                A_dot_zs = tf.gradients(reduce_all_sums(der_dynamics_dot_aux_v, zs), aux_vs)
 
                 self.A_dot_zs[hyp] = A_dot_zs
 
@@ -355,12 +353,11 @@ class ForwardHG(HyperGradient):
                 ])
                 self._z_iter = tf.group(self._z_iter, _z_iter)
 
-                # HYPERGRADIENT
-                # d_E_T = dot(vectorize_all(d_oo_d_state), vectorize_all(zs))
+                # -- HYPERGRADIENT -----
                 d_E_T = [dot(d_oo_d_s, z) for d_oo_d_s, z in zip(d_oo_d_state, zs)
-                         if d_oo_d_s is not None and z is not None]
-                hg = maybe_add(tf.reduce_sum(d_E_T), d_oo_d_hyp)  # this is right... the error is not here!
-                # hg = maybe_add(d_E_T, d_oo_d_hyp)
+                         if d_oo_d_s is not None and z is not None]  # list of dot products
+                hg = maybe_add(tf.reduce_sum(d_E_T), d_oo_d_hyp)  # sum the partial dot products and possibly ->
+                # adds the ''direct derivative'' term d(E( . , \lambda))/d \lambda
 
                 self._hypergrad_dictionary[hyp].append(hg)
 
@@ -370,23 +367,14 @@ class ForwardHG(HyperGradient):
         return hyper_list
 
     @staticmethod
-    def _create_z(optimizer_dict, hyper, d_init_dynamics_d_hyper):
+    def _create_zs(optimizer_dict, hyper, d_init_dynamics_d_hyper):
         if d_init_dynamics_d_hyper is None: d_init_dynamics_d_hyper = [None] * len(optimizer_dict.state)
         with tf.variable_scope('Z'):
             z = [slot_creator.create_slot(v, utils.val_or_zero(der, v), hyper.op.name) for v, der
                  in zip(optimizer_dict.state, d_init_dynamics_d_hyper)]
             [tf.add_to_collection(utils.GraphKeys.ZS, lm) for lm in z]
-            # utils.remove_from_collection(utils.GraphKeys.GLOBAL_VARIABLES, *z)
             # in this case it is completely fine to keep zs into the global variable...
             return z
-
-    # @property
-    # def iteration(self):
-    #     if self._iteration is None:
-    #         with tf.control_dependencies([self._z_iter]):
-    #             self._iteration = utils.flatten_list(
-    # [opt_dict.iteration for opt_dict in sorted(self._optimizer_dicts)])
-    #     return self._iteration
 
     def run(self, T_or_generator, inner_objective_feed_dicts=None, outer_objective_feed_dicts=None,
             initializer_feed_dict=None, global_step=None, session=None, online=False, inner_objective=None):
@@ -399,8 +387,12 @@ class ForwardHG(HyperGradient):
             ss.run(self._forward_initializer)
             self.inner_losses = []
 
+        # optionally may track inner objective (to check for divergence)
+        to_be_run, track_loss = utils.maybe_track_tensor(self.iteration, inner_objective)
+
         for t in range(T_or_generator) if isinstance(T_or_generator, int) else T_or_generator:
             # ss.run()
             ss.run(self._z_iter, utils.maybe_call(inner_objective_feed_dicts, t))
-            _, inner_loss = ss.run([self.iteration, inner_objective], utils.maybe_call(inner_objective_feed_dicts, t))
-            self.inner_losses.append(inner_loss)
+            _res = ss.run(to_be_run, utils.maybe_call(inner_objective_feed_dicts, t))
+
+            if track_loss: self.inner_losses.append(_res[1])
