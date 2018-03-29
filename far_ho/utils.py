@@ -213,6 +213,6 @@ def maybe_track_tensor(iter_op, tensor):
     to_be_run = [iter_op]
     track_tensor = isinstance(tensor, tf.Tensor)
     if track_tensor:  # in most cases this check should be fine
-        with tf.control_dependencies([iter_op]):  # be sure that tensor is computed AFTER the (optimization) iteration
+        with tf.control_dependencies(iter_op):  # be sure that tensor is computed AFTER the (optimization) iteration
             to_be_run.append(tf.identity(tensor))
     return to_be_run, track_tensor
