@@ -206,7 +206,7 @@ class ReverseHg(HyperGradient):
 
     @staticmethod
     def _create_lagrangian_multipliers(optimizer_dict, doo_ds):
-        lag_mul = [slot_creator.create_slot(v, utils.val_or_zero(der, v), 'alpha') for v, der
+        lag_mul = [slot_creator.create_slot(v.initialized_value(), utils.val_or_zero(der, v), 'alpha') for v, der
                    in zip(optimizer_dict.state, doo_ds)]
         [tf.add_to_collection(utils.GraphKeys.LAGRANGIAN_MULTIPLIERS, lm) for lm in lag_mul]
         utils.remove_from_collection(utils.GraphKeys.GLOBAL_VARIABLES, *lag_mul)
@@ -259,8 +259,17 @@ class ReverseHg(HyperGradient):
 
         # initialization of support variables (supports stochastic evaluation of outer objective via global_step ->
         # variable)
-        ss.run(self._reverse_initializer, feed_dict=utils.maybe_call(outer_objective_feed_dicts,
-                                                                     utils.maybe_eval(global_step, ss)))
+        # TODO (maybe tf bug or oddity) for some strange reason, if some variable's initializer depends on
+        # a placeholder, then the initializer of alpha SEEMS TO DEPEND ALSO ON THAT placeholder,
+        # as if the primary variable should be reinitialized as well, but, I've checked, the primary variable is NOT
+        # actually reinitialized. This doesn't make sense since the primary variable is already initialized
+        # and Tensorflow seems not to care... should maybe look better into this issue
+        reverse_init_fd = utils.maybe_call(outer_objective_feed_dicts, utils.maybe_eval(global_step, ss))
+        # now adding also the initializer_feed_dict because of tf quirk...
+        maybe_init_fd = utils.maybe_call(initializer_feed_dict, utils.maybe_eval(global_step, ss))
+        if maybe_init_fd is not None: reverse_init_fd = utils.merge_dicts(reverse_init_fd, maybe_init_fd)
+
+        ss.run(self._reverse_initializer, feed_dict=reverse_init_fd)
         for pt, state_feed_dict in self._state_feed_dict_generator(reversed(self._history[:-1])):
             # this should be fine also for truncated reverse... but check again the index t
             t = len(self._history) - pt - 2  # if T is int then len(self.history) is T + 1 and this numerator
