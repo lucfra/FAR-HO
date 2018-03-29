@@ -254,7 +254,8 @@ class ReverseHg(HyperGradient):
             if track_loss:
                 self._history.append(_res[0])
                 self.inner_losses.append(_res[1])
-            self._history.append(_res)
+            else:
+                self._history.append(_res)
 
         # initialization of support variables (supports stochastic evaluation of outer objective via global_step ->
         # variable)
