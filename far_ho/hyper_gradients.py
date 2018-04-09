@@ -248,7 +248,7 @@ class ReverseHg(HyperGradient):
         # optionally may track inner objective (to check for divergence)
         to_be_run, track_loss = utils.maybe_track_tensor(self.iteration, inner_objective)
 
-        for t in range(T_or_generator) if isinstance(T_or_generator, int) else T_or_generator:
+        for t in range(T_or_generator) if utils.isinteger(T_or_generator) else T_or_generator:
             _res = ss.run(to_be_run, feed_dict=utils.maybe_call(inner_objective_feed_dicts, t))
 
             if track_loss:
@@ -400,8 +400,7 @@ class ForwardHG(HyperGradient):
         # optionally may track inner objective (to check for divergence)
         to_be_run, track_loss = utils.maybe_track_tensor(self.iteration, inner_objective)
 
-        for t in range(T_or_generator) if isinstance(T_or_generator, int) else T_or_generator:
-            # ss.run()
+        for t in range(T_or_generator) if utils.isinteger(T_or_generator) else T_or_generator:
             ss.run(self._z_iter, utils.maybe_call(inner_objective_feed_dicts, t))
             _res = ss.run(to_be_run, utils.maybe_call(inner_objective_feed_dicts, t))
 

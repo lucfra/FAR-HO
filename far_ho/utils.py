@@ -1,5 +1,7 @@
 from __future__ import absolute_import, print_function, division
 
+import numpy as np
+
 import tensorflow as tf
 import sys
 # noinspection PyUnresolvedReferences
@@ -216,3 +218,7 @@ def maybe_track_tensor(iter_op, tensor):
         with tf.control_dependencies(iter_op):  # be sure that tensor is computed AFTER the (optimization) iteration
             to_be_run.append(tf.identity(tensor))
     return to_be_run, track_tensor
+
+
+def isinteger(num):
+    return isinstance(num, (int, np.int_))
