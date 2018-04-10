@@ -221,4 +221,4 @@ def maybe_track_tensor(iter_op, tensor):
 
 
 def isinteger(num):
-    return isinstance(num, (int, np.int_))
+    return isinstance(num, (int, np.int_, np.int8, np.int16, np.int32, np.int64))
