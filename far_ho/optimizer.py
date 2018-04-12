@@ -131,6 +131,11 @@ class Optimizer(tf.train.Optimizer):
                                                   colocate_gradients_with_ops, name, grad_loss)
         return OptimizerDict(ts=ts, dynamics=dyn)
 
+    def _tf_minimize(self, loss, global_step=None, var_list=None, gate_gradients=tf.train.Optimizer.GATE_OP,
+                     aggregation_method=None, colocate_gradients_with_ops=False, name=None, grad_loss=None):
+        return super(Optimizer, self).minimize(loss, global_step, var_list, gate_gradients, aggregation_method,
+                                               colocate_gradients_with_ops, name, grad_loss)
+
 
 # noinspection PyClassHasNoInit,PyAbstractClass
 class GradientDescentOptimizer(Optimizer, tf.train.GradientDescentOptimizer):
@@ -144,9 +149,8 @@ class GradientDescentOptimizer(Optimizer, tf.train.GradientDescentOptimizer):
 
 
 class BacktrackingOptimizerDict(OptimizerDict):
-
-    def __init__(self, ts, dynamics, objective, objective_after_step, lr0, m, tau=0.5, c=0.5):
-        super(BacktrackingOptimizerDict, self).__init__(ts, dynamics)
+    def __init__(self, dynamics, objective, objective_after_step, lr0, m, tau=0.5, c=0.5):
+        super(BacktrackingOptimizerDict, self).__init__(None, dynamics)
         self.objective = objective
         self.objective_after_step = objective_after_step
         # assert isinstance(learning_rate, (float, np.float32, np.float64)), 'learning rate must be a float'
@@ -155,16 +159,22 @@ class BacktrackingOptimizerDict(OptimizerDict):
         self.c = c
 
         self.m = m
-        self.armillo_cond = lambda alpha: tf.greater(objective_after_step(alpha), objective + c*alpha*m)
-        self.backtrack_body = lambda alpha: alpha*tau
+        self.armillo_cond = lambda alpha: tf.greater(objective_after_step(alpha), objective + c * alpha * m)
+        self.backtrack_body = lambda alpha: alpha * tau
         self.eta_k = tf.while_loop(self.armillo_cond, self.backtrack_body, [self.lr0])
 
         self._dynamics = [(v, vk1(self.eta_k)) for v, vk1 in self.dynamics]
 
     @property
+    def ts(self):
+        if self._ts is None:
+            self._ts = tf.group([v.assign(vk1) for v, vk1 in self._dynamics])
+        return self._ts
+
+    @property
     def iteration(self):
         if self._iteration is None:
-            with tf.control_dependencies([v.assign(vk1) for v, vk1 in self._dynamics]):
+            with tf.control_dependencies(self.ts):
                 self._iteration = self._state_read() + [self.eta_k]  # performs one iteration and returns the
                 # value of all variables in the state (ordered according to dyn)
         return self._iteration
@@ -177,40 +187,42 @@ class BacktrackingOptimizerDict(OptimizerDict):
             # TODO this might not behave well with init_dynamics, check!
 
 
-class BackTrackingGradientDescentOptimizer(Optimizer, GradientDescentOptimizer):
+class BackTrackingGradientDescentOptimizer(GradientDescentOptimizer):
+    def __init__(self, learning_rate, c=0.5, tau=0.5, use_locking=False, name="GradientDescent"):
+        super(BackTrackingGradientDescentOptimizer, self).__init__(learning_rate, use_locking, name)
+        self.c = c
+        self.tau = tau
 
     def apply_gradients(self, grads_and_vars, global_step=None, name=None):
-        ts = super(BackTrackingGradientDescentOptimizer, self).apply_gradients(grads_and_vars, global_step, name)
-        dynamics = []
-        m = 0.
-        for g, w in grads_and_vars:
-            wk = lambda eta: w - tf.cast(eta, g.dtype) * g
-            dynamics.append((w, wk))
+        # ts = super(BackTrackingGradientDescentOptimizer, self).apply_gradients(grads_and_vars, global_step, name)
+        with tf.name_scope(name, self.get_name()):
+            dynamics = []
+            m = 0.
+            for g, w in grads_and_vars:
+                wk = lambda eta: w - tf.cast(eta, g.dtype) * g
+                dynamics.append((w, wk))
 
-            m -= utils.dot(g, g)
+                m -= utils.dot(g, g)
 
-        return ts, dynamics, m
+        return dynamics, m
 
-    # def minimize(self, loss, global_step=None, var_list=None, gate_gradients=tf.train.Optimizer.GATE_OP,
-    #              aggregation_method=None, colocate_gradients_with_ops=False, name=None, grad_loss=None):
-    #
-    #     grads_and_vars = self.compute_gradients(
-    #         loss, var_list=var_list, gate_gradients=gate_gradients,
-    #         aggregation_method=aggregation_method,
-    #         colocate_gradients_with_ops=colocate_gradients_with_ops,
-    #         grad_loss=grad_loss)
-    #
-    #     vars_with_grad = [v for g, v in grads_and_vars if g is not None]
-    #     if not vars_with_grad:
-    #         raise ValueError(
-    #             "No gradients provided for any variable, check your graph for ops"
-    #             " that do not support gradients, between variables %s and loss %s." %
-    #             ([str(v) for _, v in grads_and_vars], loss))
-    #
-    #     return self.apply_gradients(grads_and_vars, global_step=global_step,
-    #                                 name=name)
+    def minimize(self, loss, global_step=None, var_list=None, gate_gradients=tf.train.Optimizer.GATE_OP,
+                 aggregation_method=None, colocate_gradients_with_ops=False, name=None, grad_loss=None):
 
+        assert callable(loss)
 
+        if var_list is None:
+            var_list = tf.trainable_variables()
+        curr_loss = loss(var_list)
+
+        dynamics, m = super(BackTrackingGradientDescentOptimizer,
+                            self)._tf_minimize(curr_loss, global_step, var_list, gate_gradients, aggregation_method,
+                                               colocate_gradients_with_ops, name, grad_loss)
+
+        loss_after_step = lambda eta: loss([dyn(eta) for v, dyn in dynamics])
+
+        return BacktrackingOptimizerDict(dynamics, curr_loss, loss_after_step, self._learning_rate_tensor,
+                                         m, self.tau, self.c)
 
 
 class MomentumOptimizer(Optimizer, tf.train.MomentumOptimizer):
