@@ -19,6 +19,7 @@ def flatten_list(lst):
 
 def merge_dicts(*dicts):
     from functools import reduce
+    # if len(dicts) == 1: return dicts[0]
     return reduce(lambda a, nd: merge_two_dicts(a, nd), dicts, {})
 
 
@@ -215,7 +216,7 @@ def maybe_track_tensor(iter_op, tensor):
     to_be_run = iter_op
     track_tensor = isinstance(tensor, tf.Tensor)
     if track_tensor:  # in most cases this check should be fine
-        with tf.control_dependencies(iter_op):  # be sure that tensor is computed AFTER the (optimization) iteration
+        with tf.control_dependencies(flatten_list(iter_op)):  # be sure that tensor is computed AFTER the (optimization) iteration
             to_be_run = [to_be_run, tf.identity(tensor)]
     return to_be_run, track_tensor
 

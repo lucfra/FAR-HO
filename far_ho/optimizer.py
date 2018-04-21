@@ -82,7 +82,7 @@ class OptimizerDict(object):
         """
         Builds a feed dictionary of (past) states
         """
-        yield {v: his[k] for k, v in enumerate(self.state)}
+        return {v: his[k] for k, v in enumerate(self.state)}
 
     def set_init_dynamics(self, init_dictionary):
         """
@@ -174,12 +174,13 @@ class BacktrackingOptimizerDict(OptimizerDict):
             with tf.control_dependencies([self.ts]):
                 self._iteration = self._state_read() + [self.eta_k]  # performs one iteration and returns the
                 # value of all variables in the state (ordered according to dyn)
-        print('iteration!', self._iteration)
         return self._iteration
 
     def state_feed_dict(self, his):
         # considers also alpha_k
-        utils.merge_dicts({v: his[k] for k, v in enumerate(self.state)}, {self.eta_k: his[-1]})
+        if len(his) == len(self.state):
+            return {v: his[k] for k, v in enumerate(self.state)}  # for the initialization step
+        return utils.merge_dicts({v: his[k] for k, v in enumerate(self.state)}, {self.eta_k: his[-1]})
 
 
 # noinspection PyAbstractClass

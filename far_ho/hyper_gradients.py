@@ -49,15 +49,15 @@ class HyperGradient(object):
 
     @property
     def initialization(self):
-        return utils.flatten_list([opt_dict.initialization for opt_dict in sorted(self._optimizer_dicts)])
+        return [opt_dict.initialization for opt_dict in sorted(self._optimizer_dicts)]
 
     @property
     def iteration(self):
-        return utils.flatten_list([opt_dict.iteration for opt_dict in sorted(self._optimizer_dicts)])
+        return [opt_dict.iteration for opt_dict in sorted(self._optimizer_dicts)]
 
     @property
     def state(self):
-        return utils.flatten_list([opt_dict.state for opt_dict in sorted(self._optimizer_dicts)])
+        return [opt_dict.state for opt_dict in sorted(self._optimizer_dicts)]
 
     def _init_ts(self):
         return tf.group(*[opt_dict.ts for opt_dict in sorted(self._optimizer_dicts)])
@@ -227,10 +227,10 @@ class ReverseHg(HyperGradient):
         return hgs
 
     def _state_feed_dict_generator(self, history):
-        state = utils.flatten_list([opt_dict.state for opt_dict in sorted(self._optimizer_dicts)])
         for t, his in enumerate(history):
-            print({v: his[k] for k, v in enumerate(state)})
-            yield t, {v: his[k] for k, v in enumerate(state)}
+            yield t, utils.merge_dicts(
+                *[od.state_feed_dict(h) for od, h in zip(sorted(self._optimizer_dicts), his)]
+            )
 
     def run(self, T_or_generator, inner_objective_feed_dicts=None, outer_objective_feed_dicts=None,
             initializer_feed_dict=None, global_step=None, session=None, online=False, inner_objective=None):
@@ -279,14 +279,6 @@ class ReverseHg(HyperGradient):
                    feed_dict=utils.merge_dicts(state_feed_dict,
                                                utils.maybe_call(inner_objective_feed_dicts, t)
                                                if inner_objective_feed_dicts else {}))
-
-
-# class ReverseHGBacktracking(ReverseHg):
-#
-#     def run(self, T_or_generator, inner_objective_feed_dicts=None, outer_objective_feed_dicts=None,
-#             initializer_feed_dict=None, global_step=None, session=None, online=False, inner_objective=None):
-#         super().run(T_or_generator, inner_objective_feed_dicts, outer_objective_feed_dicts, initializer_feed_dict,
-#                     global_step, session, online, inner_objective)
 
 
 class UnrolledReverseHG(HyperGradient):

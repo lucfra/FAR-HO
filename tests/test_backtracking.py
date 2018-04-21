@@ -2,7 +2,8 @@ import far_ho as far
 import tensorflow as tf
 import numpy as np
 
-run_gd = False
+run_gd = False  # true for constant step size
+right_step = False
 
 tf.reset_default_graph()
 ss = tf.InteractiveSession()
@@ -30,12 +31,13 @@ def inner_obj(var_list):
 io_lip = 1. + lmbd
 
 farho = far.HyperOptimizer(far.ReverseHg())
-# gd = far.GradientDescentOptimizer(1.)
 if run_gd:
     inner_obj = inner_obj([w, b])
-    gd = far.GradientDescentOptimizer(2 * kappa / io_lip)
+    if right_step:
+        gd = far.GradientDescentOptimizer(2 * kappa / io_lip)
+    else: gd = far.GradientDescentOptimizer(1.)
 else:
-    gd = far.BackTrackingGradientDescentOptimizer(tf.constant(.7831))
+    gd = far.BackTrackingGradientDescentOptimizer(tf.constant(1.))
 
 run = farho.minimize(outer_obj, tf.train.GradientDescentOptimizer(0.01), inner_obj, gd, var_list=[w, b],
                      hyper_list=[lmbd])
@@ -43,8 +45,10 @@ run = farho.minimize(outer_obj, tf.train.GradientDescentOptimizer(0.01), inner_o
 tf.global_variables_initializer().run()
 
 rs = []
-for t in range(3, 4):
+for t in range(10, 100):
     run(t)
     #     print(farho.hypergradient._history)
     #     print()
     rs.append(ss.run(far.hypergradients())[0])
+
+print(rs)
