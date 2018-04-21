@@ -119,13 +119,13 @@ class OptimizerDict(object):
 class Optimizer(tf.train.Optimizer):
     def minimize(self, loss, global_step=None, var_list=None, gate_gradients=tf.train.Optimizer.GATE_OP,
                  aggregation_method=None, colocate_gradients_with_ops=False, name=None, grad_loss=None):
-        # compute_ddyn_dhypers=False, hyperparameters=None):  (looks like these parameters are no longer needed)
         """
-        Returns a training step operation and the training dynamics in the form of
-        list of var_and_dynamics where var are both variables in `var_list` and also additional state (auxiliary)
-        variables needed
+        Returns an `OptimizerDict` object relative to this minimization. See tf.train.Optimizer.minimize.
 
-        See tf.train.Optimizer.minimize.  Adds the computation of B_t if forward_hg is `True`
+        `OptimizerDict` objects notably contain a field `ts` for the training step and
+        and a field `dynamics` for the optimization dynamics. The `dynamics` a list of
+        var_and_dynamics where var are both variables in `var_list` and also
+        additional state (auxiliary) variables, as needed.
         """
         ts, dyn = super(Optimizer, self).minimize(loss, global_step, var_list, gate_gradients, aggregation_method,
                                                   colocate_gradients_with_ops, name, grad_loss)
@@ -160,10 +160,12 @@ class BacktrackingOptimizerDict(OptimizerDict):
 
         self.m = m
         self.armillo_cond = lambda alpha: tf.greater(objective_after_step(alpha), objective + c * alpha * m)
+
         self.backtrack_body = lambda alpha: alpha * tau
+
         self.eta_k = tf.while_loop(self.armillo_cond, self.backtrack_body, [self.lr0])
 
-        self._dynamics = [(v, vk1(self.eta_k)) for v, vk1 in self.dynamics]
+        self._dynamics = [(v, vk1(self.eta_k)) for v, vk1 in dynamics]
 
     @property
     def ts(self):
@@ -174,7 +176,7 @@ class BacktrackingOptimizerDict(OptimizerDict):
     @property
     def iteration(self):
         if self._iteration is None:
-            with tf.control_dependencies(self.ts):
+            with tf.control_dependencies([self.ts]):
                 self._iteration = self._state_read() + [self.eta_k]  # performs one iteration and returns the
                 # value of all variables in the state (ordered according to dyn)
         return self._iteration
@@ -192,9 +194,13 @@ class BackTrackingGradientDescentOptimizer(GradientDescentOptimizer):
         super(BackTrackingGradientDescentOptimizer, self).__init__(learning_rate, use_locking, name)
         self.c = c
         self.tau = tau
+        # self._learning_rate_tensor = None  # Should't it be already defined??
+        # print(self._learning_rate_tensor)
 
     def apply_gradients(self, grads_and_vars, global_step=None, name=None):
         # ts = super(BackTrackingGradientDescentOptimizer, self).apply_gradients(grads_and_vars, global_step, name)
+        # self._learning_rate_t = tf.convert_to_tensor(self._learning_rate, dtype=grads_and_vars[0][1].)
+        super(BackTrackingGradientDescentOptimizer, self)._prepare()
         with tf.name_scope(name, self.get_name()):
             dynamics = []
             m = 0.
