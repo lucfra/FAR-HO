@@ -229,6 +229,7 @@ class ReverseHg(HyperGradient):
     def _state_feed_dict_generator(self, history):
         state = utils.flatten_list([opt_dict.state for opt_dict in sorted(self._optimizer_dicts)])
         for t, his in enumerate(history):
+            print({v: his[k] for k, v in enumerate(state)})
             yield t, {v: his[k] for k, v in enumerate(state)}
 
     def run(self, T_or_generator, inner_objective_feed_dicts=None, outer_objective_feed_dicts=None,
@@ -278,6 +279,14 @@ class ReverseHg(HyperGradient):
                    feed_dict=utils.merge_dicts(state_feed_dict,
                                                utils.maybe_call(inner_objective_feed_dicts, t)
                                                if inner_objective_feed_dicts else {}))
+
+
+# class ReverseHGBacktracking(ReverseHg):
+#
+#     def run(self, T_or_generator, inner_objective_feed_dicts=None, outer_objective_feed_dicts=None,
+#             initializer_feed_dict=None, global_step=None, session=None, online=False, inner_objective=None):
+#         super().run(T_or_generator, inner_objective_feed_dicts, outer_objective_feed_dicts, initializer_feed_dict,
+#                     global_step, session, online, inner_objective)
 
 
 class UnrolledReverseHG(HyperGradient):
