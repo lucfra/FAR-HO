@@ -165,7 +165,7 @@ class BacktrackingOptimizerDict(OptimizerDict):
     @property
     def ts(self):
         if self._ts is None:
-            self._ts = tf.group([v.assign(vk1) for v, vk1 in self._dynamics])
+            self._ts = tf.group(*[v.assign(vk1) for v, vk1 in self._dynamics])
         return self._ts
 
     @property
