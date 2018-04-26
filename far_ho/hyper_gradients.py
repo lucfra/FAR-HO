@@ -63,6 +63,10 @@ class HyperGradient(object):
         return tf.group(*[opt_dict.ts for opt_dict in sorted(self._optimizer_dicts)])
 
     @property
+    def inner_objectives(self):
+        return self.inner_losses
+
+    @property
     def ts(self):
         if self._ts is None:
             self._ts = self._init_ts()
