@@ -18,7 +18,7 @@ sol = L / (1 + lmbd)
 w = tf.get_variable('w', initializer=tf.zeros_initializer, shape=(1,))
 b = tf.get_variable('b', initializer=tf.ones_initializer, shape=(2,))
 
-outer_obj = (w - 2.) ** 2 / 2.
+outer_obj = (w - 2.) ** 2 / 2. + lmbd**2
 
 
 #  this should be a callable! yeah
@@ -45,7 +45,7 @@ run = farho.minimize(outer_obj, tf.train.GradientDescentOptimizer(0.01), inner_o
 tf.global_variables_initializer().run()
 
 rs = []
-for t in range(10, 100):
+for t in range(10, 30):
     run(t)
     #     print(farho.hypergradient._history)
     #     print()

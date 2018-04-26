@@ -102,7 +102,8 @@ class HyperOptimizer(object):
             var_list=var_list,
             **minimize_kwargs
         )
-        self.inner_objective = inner_objective
+        self.inner_objective = optim_dict.objective if hasattr(optim_dict, 'objective') else inner_objective  # first
+        # part is true for BacktrackingGD
         if init_dynamics_dict:
             optim_dict.set_init_dynamics(init_dynamics_dict)
         return optim_dict
