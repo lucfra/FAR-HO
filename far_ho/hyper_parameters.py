@@ -79,7 +79,7 @@ class HyperOptimizer(object):
         self._h_optim_dict = defaultdict(lambda: OrderedSet())
 
         self.inner_objective = None
-        self.inner_objectives = []
+        # self.inner_objectives = []
 
     # noinspection PyMethodMayBeStatic
     def inner_problem(self, inner_objective, inner_objective_optimizer, var_list=None, init_dynamics_dict=None,
@@ -91,7 +91,7 @@ class HyperOptimizer(object):
         :param inner_objective: a loss function for the inner optimization problem
         :param inner_objective_optimizer: an instance of some `far.Optimizer` (optimizers from Tensorflow must be
                                             extended to include tensors for the dynamics)
-        :param var_list: optional list of variables (of the inner optimization problem)
+        :param var_list: optional list of variables (of the inner optimization problem)from
         :param init_dynamics_dict: optional dictrionary that defines Phi_0 (see `OptimizerDict.set_init_dynamics`)
         :param minimize_kwargs: optional arguments to pass to `optimizer.minimize`
         :return: `OptimizerDict` from optimizer.
@@ -189,6 +189,10 @@ class HyperOptimizer(object):
         assert self._fin_hts is not None, 'Must call HyperOptimizer.finalize before performing optimization.'
         return self._fin_hts
 
+    @property
+    def inner_objectives(self):
+        return self._hypergradient.inner_losses
+
     def run(self, T_or_generator, inner_objective_feed_dicts=None, outer_objective_feed_dicts=None,
             initializer_feed_dict=None, optimization_step_feed_dict=None, session=None, online=False,
             _skip_hyper_ts=False, _only_hyper_ts=False):
@@ -215,15 +219,15 @@ class HyperOptimizer(object):
         :param _skip_hyper_ts: if `True` does not perform hyperparameter optimization step.
         """
         if not _only_hyper_ts:
-            if not online:
-                self.inner_objectives = []
+            # if not online:
+            #     self.inner_objectives = []
             self._hypergradient.run(T_or_generator, inner_objective_feed_dicts,
                                     outer_objective_feed_dicts,
                                     initializer_feed_dict,
                                     session=session,
                                     online=online, global_step=self._global_step,
                                     inner_objective=self.inner_objective)
-            self.inner_objectives = self._hypergradient.inner_losses
+            # self.inner_objectives = self._hypergradient.inner_losses
 
         if not _skip_hyper_ts:
             ss = session or tf.get_default_session()
