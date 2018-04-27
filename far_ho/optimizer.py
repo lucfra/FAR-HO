@@ -61,20 +61,21 @@ class OptimizerDict(object):
     @property
     def dynamics(self):
         """
-        :return: The dynamics, a list of pairs (state_variable_k, state_variable_{k+1})
+        :return: A generator for the dynamics (state_variable_{k+1})
         """
-        return [d for (v, d) in self._dynamics]
+        return (d for (v, d) in self._dynamics)
 
     @property
     def state(self):
         """
-        :return: All the state variables (optimized variables and possibly auxiliary variables) being optimized
+        :return: A generator for all the state variables (optimized variables and possibly auxiliary variables)
+        being optimized
         """
-        return [v for (v, d) in self._dynamics]  # overridden in Adam
+        return (v for (v, d) in self._dynamics)  # overridden in Adam
 
     def _state_read(self):
         """
-        :return: list of read value op for the state variables
+        :return: generator of read value op for the state variables
         """
         return [v.read_value() for v in self.state]  # not sure about read_value vs value
 
@@ -108,6 +109,9 @@ class OptimizerDict(object):
     def __lt__(self, other):  # make OptimizerDict sortable
         assert isinstance(other, OptimizerDict)
         return hash(self) < hash(other)
+
+    def __len__(self):
+        return len(self._dynamics)
 
 
 # noinspection PyAbstractClass,PyClassHasNoInit
@@ -178,7 +182,7 @@ class BacktrackingOptimizerDict(OptimizerDict):
 
     def state_feed_dict(self, his):
         # considers also alpha_k
-        if len(his) == len(self.state):
+        if len(his) == len(self._dynamics):
             return {v: his[k] for k, v in enumerate(self.state)}  # for the initialization step
         return utils.merge_dicts({v: his[k] for k, v in enumerate(self.state)}, {self.eta_k: his[-1]})
 

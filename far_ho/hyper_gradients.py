@@ -159,7 +159,7 @@ class ReverseHg(HyperGradient):
         # derivative of outer objective w.r.t. state
         with tf.variable_scope(outer_objective.op.name):  # for some reason without this there is a cathastrofic
             # failure...
-            doo_ds = tf.gradients(outer_objective, optimizer_dict.state)
+            doo_ds = tf.gradients(outer_objective, list(optimizer_dict.state))
 
             alphas = self._create_lagrangian_multipliers(optimizer_dict, doo_ds)
 
@@ -173,7 +173,7 @@ class ReverseHg(HyperGradient):
             alpha_dot_B = tf.gradients(lag_phi_t, hyper_list)
             # check that optimizer_dict has initial ops (phi_0)
             if optimizer_dict.init_dynamics is not None:
-                lag_phi0 = utils.dot(alpha_vec, utils.vectorize_all([d for (s, d) in optimizer_dict.init_dynamics]))
+                lag_phi0 = utils.dot(alpha_vec, utils.vectorize_all(d for (s, d) in optimizer_dict.init_dynamics))
                 alpha_dot_B0 = tf.gradients(lag_phi0, hyper_list)
             else:
                 alpha_dot_B0 = [None] * len(hyper_list)
@@ -195,7 +195,7 @@ class ReverseHg(HyperGradient):
 
             with tf.control_dependencies([hyper_grad_step]):  # first update hypergradinet then alphas.
                 _alpha_iter = tf.group(*[alpha.assign(dl_ds) for alpha, dl_ds
-                                         in zip(alphas, tf.gradients(lag_phi_t, optimizer_dict.state))])
+                                         in zip(alphas, tf.gradients(lag_phi_t, list(optimizer_dict.state)))])
             self._alpha_iter = tf.group(self._alpha_iter, _alpha_iter)  # put all the backward iterations toghether
 
             [self._hypergrad_dictionary[h].append(hg) for h, hg in zip(hyper_list, hyper_grad_vars)]
@@ -383,7 +383,7 @@ class ForwardHG(HyperGradient):
 
     @staticmethod
     def _create_zs(optimizer_dict, hyper, d_init_dynamics_d_hyper):
-        if d_init_dynamics_d_hyper is None: d_init_dynamics_d_hyper = [None] * len(optimizer_dict.state)
+        if d_init_dynamics_d_hyper is None: d_init_dynamics_d_hyper = [None] * len(optimizer_dict)
         with tf.variable_scope('Z'):
             z = [slot_creator.create_slot(v, utils.val_or_zero(der, v), hyper.op.name) for v, der
                  in zip(optimizer_dict.state, d_init_dynamics_d_hyper)]
