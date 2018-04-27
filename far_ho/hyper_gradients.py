@@ -164,7 +164,7 @@ class ReverseHg(HyperGradient):
             alphas = self._create_lagrangian_multipliers(optimizer_dict, doo_ds)
 
             alpha_vec = utils.vectorize_all(alphas)
-            dyn_vec = utils.vectorize_all(optimizer_dict.dynamics)
+            dyn_vec = utils.vectorize_all(list(optimizer_dict.dynamics))
             lag_phi_t = utils.dot(alpha_vec, dyn_vec, name='iter_wise_lagrangian_part1')
             # TODO outer_objective might be a list... handle this case
 
@@ -173,7 +173,7 @@ class ReverseHg(HyperGradient):
             alpha_dot_B = tf.gradients(lag_phi_t, hyper_list)
             # check that optimizer_dict has initial ops (phi_0)
             if optimizer_dict.init_dynamics is not None:
-                lag_phi0 = utils.dot(alpha_vec, utils.vectorize_all(d for (s, d) in optimizer_dict.init_dynamics))
+                lag_phi0 = utils.dot(alpha_vec, utils.vectorize_all([d for (s, d) in optimizer_dict.init_dynamics]))
                 alpha_dot_B0 = tf.gradients(lag_phi0, hyper_list)
             else:
                 alpha_dot_B0 = [None] * len(hyper_list)
