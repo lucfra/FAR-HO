@@ -20,6 +20,11 @@ class HyperGradient(object):
         self._ts = None
         self.inner_losses = []
 
+        self._initialization = None
+        self._iteration = None
+        self._state = None
+        self._init_ts = None
+
     _ERROR_NOT_OPTIMIZER_DICT = """
     Looks like {} is not an `OptimizerDict`. Use optimizers in far_ho.optimizers for obtaining an OptimizerDict.
     """
@@ -49,15 +54,21 @@ class HyperGradient(object):
 
     @property
     def initialization(self):
-        return [opt_dict.initialization for opt_dict in sorted(self._optimizer_dicts)]
+        if self._initialization is None:
+            self._initialization = [opt_dict.initialization for opt_dict in sorted(self._optimizer_dicts)]
+        return self._initialization
 
     @property
     def iteration(self):
-        return [opt_dict.iteration for opt_dict in sorted(self._optimizer_dicts)]
+        if self._iteration is None:
+            self._iteration = [opt_dict.iteration for opt_dict in sorted(self._optimizer_dicts)]
+        return self._iteration
 
     @property
     def state(self):
-        return [opt_dict.state for opt_dict in sorted(self._optimizer_dicts)]
+        if self._state is None:
+            self._state = [opt_dict.state for opt_dict in sorted(self._optimizer_dicts)]
+        return self._state
 
     def _init_ts(self):
         return tf.group(*[opt_dict.ts for opt_dict in sorted(self._optimizer_dicts)])
@@ -129,6 +140,8 @@ class HyperGradient(object):
 
         return [(_aggregate_process_manage_collection(self._hypergrad_dictionary[h]),
                  h) for h in hyper_list]
+
+    # def track
 
 
 class ReverseHg(HyperGradient):
@@ -251,16 +264,16 @@ class ReverseHg(HyperGradient):
             self._history.append(ss.run(self.state))
 
         # optionally may track inner objective (to check for divergence)
-        to_be_run, track_loss = utils.maybe_track_tensor(self.iteration, inner_objective)
+        # to_be_run, track_loss = utils.maybe_track_tensor(self.iteration, inner_objective)
 
         for t in range(T_or_generator) if utils.isinteger(T_or_generator) else T_or_generator:
-            _res = ss.run(to_be_run, feed_dict=utils.maybe_call(inner_objective_feed_dicts, t))
+            _res = ss.run(self.iteration, feed_dict=utils.maybe_call(inner_objective_feed_dicts, t))
 
-            if track_loss:
-                self._history.append(_res[0])
-                self.inner_losses.append(_res[1])
-            else:
-                self._history.append(_res)
+            # if track_loss:
+            #     self._history.append(_res[0])
+            #     self.inner_losses.append(_res[1])
+            # else:
+            self._history.append(_res)
 
         # initialization of support variables (supports stochastic evaluation of outer objective via global_step ->
         # variable)
