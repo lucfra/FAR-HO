@@ -23,7 +23,7 @@ class HyperGradient(object):
         self._initialization = None
         self._iteration = None
         self._state = None
-        self._init_ts = None
+        # self._init_ts = None
 
     _ERROR_NOT_OPTIMIZER_DICT = """
     Looks like {} is not an `OptimizerDict`. Use optimizers in far_ho.optimizers for obtaining an OptimizerDict.
@@ -70,9 +70,6 @@ class HyperGradient(object):
             self._state = [opt_dict.state for opt_dict in sorted(self._optimizer_dicts)]
         return self._state
 
-    def _init_ts(self):
-        return tf.group(*[opt_dict.ts for opt_dict in sorted(self._optimizer_dicts)])
-
     @property
     def inner_objectives(self):
         return self.inner_losses
@@ -80,7 +77,7 @@ class HyperGradient(object):
     @property
     def ts(self):
         if self._ts is None:
-            self._ts = self._init_ts()
+            self._ts = tf.group(*[opt_dict.ts for opt_dict in sorted(self._optimizer_dicts)])
         return self._ts
 
     def run(self, T_or_generator, inner_objective_feed_dicts=None, outer_objective_feed_dicts=None,
@@ -140,8 +137,6 @@ class HyperGradient(object):
 
         return [(_aggregate_process_manage_collection(self._hypergrad_dictionary[h]),
                  h) for h in hyper_list]
-
-    # def track
 
 
 class ReverseHg(HyperGradient):
