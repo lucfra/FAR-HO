@@ -9,12 +9,13 @@ from far_ho import utils
 
 
 class OptimizerDict(object):
-    def __init__(self, ts, dynamics):
+    def __init__(self, ts, dynamics, objective):
         self._ts = ts
         self._dynamics = dynamics
         self._iteration = None
         self._initialization = None
         self._init_dyn = None  # for phi_0 (will be a dictionary (state-variable, phi_0 op)
+        self.objective = objective
 
     @property
     def ts(self):
@@ -128,7 +129,7 @@ class Optimizer(tf.train.Optimizer):
         """
         ts, dyn = super(Optimizer, self).minimize(loss, global_step, var_list, gate_gradients, aggregation_method,
                                                   colocate_gradients_with_ops, name, grad_loss)
-        return OptimizerDict(ts=ts, dynamics=dyn)
+        return OptimizerDict(ts=ts, dynamics=dyn, objective=loss)
 
     def _tf_minimize(self, loss, global_step=None, var_list=None, gate_gradients=tf.train.Optimizer.GATE_OP,
                      aggregation_method=None, colocate_gradients_with_ops=False, name=None, grad_loss=None):
@@ -149,8 +150,7 @@ class GradientDescentOptimizer(Optimizer, tf.train.GradientDescentOptimizer):
 
 class BacktrackingOptimizerDict(OptimizerDict):
     def __init__(self, dynamics, objective, objective_after_step, lr0, m, tau=0.5, c=0.5):
-        super(BacktrackingOptimizerDict, self).__init__(None, dynamics)
-        self.objective = objective
+        super(BacktrackingOptimizerDict, self).__init__(None, dynamics, objective)
         self.objective_after_step = objective_after_step
         # assert isinstance(learning_rate, (float, np.float32, np.float64)), 'learning rate must be a float'
         self.lr0 = lr0

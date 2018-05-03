@@ -71,14 +71,13 @@ class HyperOptimizer(object):
     """
 
     def __init__(self, hypergradient=None):
-        self.inner_objective = None
         assert hypergradient is None or isinstance(hypergradient, HyperGradient)
         self._hypergradient = hypergradient or ReverseHg()
         self._fin_hts = None
         self._global_step = None
         self._h_optim_dict = defaultdict(lambda: OrderedSet())
 
-        self.inner_objective = None
+        self._inner_objective = None
         # self.inner_objectives = []
 
     # noinspection PyMethodMayBeStatic
@@ -102,9 +101,12 @@ class HyperOptimizer(object):
             var_list=var_list,
             **minimize_kwargs
         )
-        inner_objective = optim_dict.objective if hasattr(optim_dict, 'objective') else inner_objective  # first
-        if self.inner_objective is None: self.inner_objective = [inner_objective]
-        else: self.inner_objective = tf.concat((self.inner_objective, [inner_objective]), axis=0)
+        if hasattr(optim_dict, 'objective'):
+            inner_objective = optim_dict.objective
+            if self._inner_objective is None: self._inner_objective = [inner_objective]
+            else: self._inner_objective = tf.concat((self._inner_objective, [inner_objective]), axis=0)
+        else: pass  # otherwise assume that your inner objective is not a tensor (perhaps a dictionary or some other
+        # structure for "non-standard" optimizers) so has not to be tracked
 
         # part is true for BacktrackingGD
         if init_dynamics_dict:
@@ -191,15 +193,14 @@ class HyperOptimizer(object):
 
     @property
     def inner_objectives(self):
-        return self._hypergradient.inner_losses
+        return self._hypergradient.inner_objectives
 
     def run(self, T_or_generator, inner_objective_feed_dicts=None, outer_objective_feed_dicts=None,
             initializer_feed_dict=None, optimization_step_feed_dict=None, session=None, online=False,
-            _skip_hyper_ts=False, _only_hyper_ts=False):
+            _skip_hyper_ts=False, _only_hyper_ts=False, forward_callback=None):
         """
         Run an hyper-iteration (i.e. train the model(s) and compute hypergradients) and updates the hyperparameters.
 
-        :param _only_hyper_ts: just execute the update of the hyperparameters
         :param T_or_generator: int or generator (that yields an int), number of iteration (or stopping condition)
                                 for the inner optimization (training) dynamics
         :param inner_objective_feed_dicts: an optional feed dictionary for the inner problem. Can be a function of
@@ -216,18 +217,19 @@ class HyperOptimizer(object):
         :param session: optional session
         :param online: default `False` if `True` performs the online version of the algorithms (i.e. does not
                             reinitialize the state after at each run).
+        :param forward_callback: optional callback function of signature
+                                (step (int), feed_dictionary, tf.Session) -> None
+                                    that are called after every forward iteration.
         :param _skip_hyper_ts: if `True` does not perform hyperparameter optimization step.
+        :param _only_hyper_ts: just execute the update of the hyperparameters
         """
         if not _only_hyper_ts:
-            # if not online:
-            #     self.inner_objectives = []
             self._hypergradient.run(T_or_generator, inner_objective_feed_dicts,
                                     outer_objective_feed_dicts,
                                     initializer_feed_dict,
                                     session=session,
                                     online=online, global_step=self._global_step,
-                                    inner_objective=self.inner_objective)
-            # self.inner_objectives = self._hypergradient.inner_losses
+                                    forward_callback=forward_callback)
 
         if not _skip_hyper_ts:
             ss = session or tf.get_default_session()
@@ -241,3 +243,19 @@ class HyperOptimizer(object):
                 return merge_dicts(_od, _oo_fd)
 
             ss.run(self._hyperit, _opt_fd())
+
+    # SOME USEFUL FORWARD CALLBACK FUNCTION --------
+
+    def track_inner_objectives_fc(self):
+        """
+        Helper method for tracking inner objectives,
+
+        :return: pair of [list on which inner objectives values will be stored, callback function
+                    (to be passed to run)]
+        """
+        inner_objectives_values = []
+
+        def _forward_callback(_, fd, ss):
+            inner_objectives_values.append(ss.run(self.inner_objectives, fd))
+
+        return inner_objectives_values, _forward_callback

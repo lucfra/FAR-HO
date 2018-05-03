@@ -16,9 +16,9 @@ RAISE_ERROR_ON_DETACHED = False
 class HyperGradient(object):
     def __init__(self):
         self._optimizer_dicts = set()
+        self._inner_objectives = None
         self._hypergrad_dictionary = defaultdict(lambda: [])  # dictionary (hyperarameter, list of hypergradients)
         self._ts = None
-        self.inner_losses = []
 
         self._initialization = None
         self._iteration = None
@@ -72,7 +72,10 @@ class HyperGradient(object):
 
     @property
     def inner_objectives(self):
-        return self.inner_losses
+        if self._inner_objectives is None:
+            self._inner_objectives = [opt.objective if hasattr(opt, 'objective') else tf.constant(False)
+                                      for opt in sorted(self._optimizer_dicts)]
+        return self._inner_objectives
 
     @property
     def ts(self):
@@ -245,30 +248,25 @@ class ReverseHg(HyperGradient):
             )
 
     def run(self, T_or_generator, inner_objective_feed_dicts=None, outer_objective_feed_dicts=None,
-            initializer_feed_dict=None, global_step=None, session=None, online=False, inner_objective=None):
+            initializer_feed_dict=None, global_step=None, session=None, online=False, forward_callback=None):
 
         ss = session or tf.get_default_session()
 
         self._history.clear()
         if not online:
-            self.inner_losses.clear()
-            self._history.append(ss.run(self.initialization, feed_dict=utils.maybe_call(
-                initializer_feed_dict, utils.maybe_eval(global_step, ss))))
+            _fd = utils.maybe_call(initializer_feed_dict, utils.maybe_eval(global_step, ss))
+            self._history.append(ss.run(self.initialization, feed_dict=_fd))
 
         else:
             self._history.append(ss.run(self.state))
 
         # optionally may track inner objective (to check for divergence)
-        # to_be_run, track_loss = utils.maybe_track_tensor(self.iteration, inner_objective)
 
         for t in range(T_or_generator) if utils.isinteger(T_or_generator) else T_or_generator:
-            _res = ss.run(self.iteration, feed_dict=utils.maybe_call(inner_objective_feed_dicts, t))
-
-            # if track_loss:
-            #     self._history.append(_res[0])
-            #     self.inner_losses.append(_res[1])
-            # else:
-            self._history.append(_res)
+            _fd = utils.maybe_call(inner_objective_feed_dicts, t)
+            self._history.append(ss.run(self.iteration, feed_dict=_fd))
+            if forward_callback is not None:
+                forward_callback(t, _fd, ss)
 
         # initialization of support variables (supports stochastic evaluation of outer objective via global_step ->
         # variable)
@@ -400,7 +398,7 @@ class ForwardHG(HyperGradient):
             return z
 
     def run(self, T_or_generator, inner_objective_feed_dicts=None, outer_objective_feed_dicts=None,
-            initializer_feed_dict=None, global_step=None, session=None, online=False, inner_objective=None):
+            initializer_feed_dict=None, global_step=None, session=None, online=False, forward_callback=None):
 
         ss = session or tf.get_default_session()
 
@@ -408,13 +406,11 @@ class ForwardHG(HyperGradient):
             ss.run(self.initialization, feed_dict=utils.maybe_call(
                 initializer_feed_dict, utils.maybe_eval(global_step, ss)))
             ss.run(self._forward_initializer)
-            self.inner_losses = []
 
         # optionally may track inner objective (to check for divergence)
-        to_be_run, track_loss = utils.maybe_track_tensor(self.iteration, inner_objective)
-
         for t in range(T_or_generator) if utils.isinteger(T_or_generator) else T_or_generator:
-            ss.run(self._z_iter, utils.maybe_call(inner_objective_feed_dicts, t))
-            _res = ss.run(to_be_run, utils.maybe_call(inner_objective_feed_dicts, t))
-
-            if track_loss: self.inner_losses.append(_res[1])
+            _fd = utils.maybe_call(inner_objective_feed_dicts, t)
+            ss.run(self._z_iter, _fd)
+            ss.run(self.iteration, _fd)
+            if forward_callback is not None:
+                forward_callback(t, _fd, ss)
