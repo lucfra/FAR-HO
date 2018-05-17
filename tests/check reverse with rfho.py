@@ -47,7 +47,7 @@ oo = tf.reduce_mean(v1*v2)
 
 # In[18]:
 
-rhg = far.ReverseHg()
+rhg = far.ReverseHG()
 rhg.compute_gradients(oo, io_optim_dict)
 
 optim_oo = tf.train.AdamOptimizer()

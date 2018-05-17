@@ -6,7 +6,7 @@ from collections import defaultdict
 
 import tensorflow as tf
 import numpy as np
-import sys
+# import sys
 
 from far_ho.utils import maybe_call, maybe_eval, merge_dicts, as_list
 
@@ -17,7 +17,7 @@ except ImportError:
     OrderedSet = set
 
 from far_ho.optimizer import Optimizer
-from far_ho.hyper_gradients import ReverseHg, HyperGradient
+from far_ho.hyper_gradients import ReverseHG, HyperGradient
 from far_ho.utils import GraphKeys
 
 HYPERPARAMETERS_COLLECTIONS = (GraphKeys.HYPERPARAMETERS, GraphKeys.GLOBAL_VARIABLES)
@@ -25,7 +25,7 @@ HYPERPARAMETERS_COLLECTIONS = (GraphKeys.HYPERPARAMETERS, GraphKeys.GLOBAL_VARIA
 
 # noinspection PyArgumentList,PyTypeChecker
 def get_hyperparameter(name, initializer=None, shape=None, dtype=None, collections=None,
-                       scalar=False):
+                       scalar=False, constraint=None):
     """
     Creates an hyperparameter variable, which is a GLOBAL_VARIABLE
     and HYPERPARAMETER. Mirrors the behavior of `tf.get_variable`.
@@ -39,6 +39,7 @@ def get_hyperparameter(name, initializer=None, shape=None, dtype=None, collectio
     :param scalar: default False, if True splits the hyperparameter in its scalar components, i.e. each component
                     will be a single scalar hyperparameter. In this case the method returns a tensor which of the
                     desired shape (use this option with `ForwardHG`)
+    :param constraint: optional contstraint for the variable (only if not scalar..)
 
     :return: the newly created variable, or, if `scalar` is `True` a tensor composed by scalar variables.
     """
@@ -46,18 +47,22 @@ def get_hyperparameter(name, initializer=None, shape=None, dtype=None, collectio
     if collections:
         _coll += as_list(collections)
     if not scalar:
-        return tf.get_variable(name, shape, dtype, initializer, trainable=False,
-                               collections=_coll)
+        try:
+            return tf.get_variable(name, shape, dtype, initializer, trainable=False,
+                                   collections=_coll, constraint=constraint)
+        except TypeError as e:
+            print(e)
+            print('Trying to ignore constraints (to use constraints update tensorflow.')
+            return tf.get_variable(name, shape, dtype, initializer, trainable=False,
+                                   collections=_coll)
     else:
         with tf.variable_scope(name + '_components'):
             _shape = shape or initializer.shape
             if isinstance(_shape, tf.TensorShape):
                 _shape = _shape.as_list()
-            # _tmp_lst = reduce(lambda a, v: [a]*v, shape[::-1], None)
             _tmp_lst = np.empty(_shape, object)
             for k in range(np.multiply.reduce(_shape)):
                 indices = np.unravel_index(k, _shape)
-                # print(indices)
                 _ind_name = '_'.join([str(ind) for ind in indices])
                 _tmp_lst[indices] = tf.get_variable(_ind_name, (), dtype,
                                                     initializer if callable(initializer) else initializer[indices],
@@ -72,7 +77,7 @@ class HyperOptimizer(object):
 
     def __init__(self, hypergradient=None):
         assert hypergradient is None or isinstance(hypergradient, HyperGradient)
-        self._hypergradient = hypergradient or ReverseHg()
+        self._hypergradient = hypergradient or ReverseHG()
         self._fin_hts = None
         self._global_step = None
         self._h_optim_dict = defaultdict(lambda: OrderedSet())
@@ -103,9 +108,12 @@ class HyperOptimizer(object):
         )
         if hasattr(optim_dict, 'objective'):
             inner_objective = optim_dict.objective
-            if self._inner_objective is None: self._inner_objective = [inner_objective]
-            else: self._inner_objective = tf.concat((self._inner_objective, [inner_objective]), axis=0)
-        else: pass  # otherwise assume that your inner objective is not a tensor (perhaps a dictionary or some other
+            if self._inner_objective is None:
+                self._inner_objective = [inner_objective]
+            else:
+                self._inner_objective = tf.concat((self._inner_objective, [inner_objective]), axis=0)
+        else:
+            pass  # otherwise assume that your inner objective is not a tensor (perhaps a dictionary or some other
         # structure for "non-standard" optimizers) so has not to be tracked
 
         # part is true for BacktrackingGD
@@ -170,8 +178,8 @@ class HyperOptimizer(object):
                 with tf.control_dependencies([self._fin_hts]):
                     self._fin_hts = self._global_step.assign_add(1).op
         else:
-            print('HyperOptimizer WARNING:, finalize has already been called on this object, ' +
-                  'further calls have no effect', file=sys.stderr)
+            raise ValueError('HyperOptimizer.finalize has already been called on ' +
+                             'this object, further calls have no effect')
         return self.run
 
     @property
@@ -197,7 +205,7 @@ class HyperOptimizer(object):
 
     def run(self, T_or_generator, inner_objective_feed_dicts=None, outer_objective_feed_dicts=None,
             initializer_feed_dict=None, optimization_step_feed_dict=None, session=None, online=False,
-            _skip_hyper_ts=False, _only_hyper_ts=False, forward_callback=None):
+            _skip_hyper_ts=False, _only_hyper_ts=False, callback=None):
         """
         Run an hyper-iteration (i.e. train the model(s) and compute hypergradients) and updates the hyperparameters.
 
@@ -217,7 +225,7 @@ class HyperOptimizer(object):
         :param session: optional session
         :param online: default `False` if `True` performs the online version of the algorithms (i.e. does not
                             reinitialize the state after at each run).
-        :param forward_callback: optional callback function of signature
+        :param callback: optional callback function of signature
                                 (step (int), feed_dictionary, tf.Session) -> None
                                     that are called after every forward iteration.
         :param _skip_hyper_ts: if `True` does not perform hyperparameter optimization step.
@@ -229,7 +237,7 @@ class HyperOptimizer(object):
                                     initializer_feed_dict,
                                     session=session,
                                     online=online, global_step=self._global_step,
-                                    forward_callback=forward_callback)
+                                    callback=callback)
 
         if not _skip_hyper_ts:
             ss = session or tf.get_default_session()

@@ -1,15 +1,25 @@
 from __future__ import absolute_import, print_function, division
 
-import numpy as np
-
 import tensorflow as tf
 import sys
 # noinspection PyUnresolvedReferences
 try:
     from experiment_manager.utils import *
-except ImportError:
-    # print('package experiment_manager not found')
-    pass
+except ImportError as err:
+    print('Warning:', err,
+          'This is not a required package! However, there might be a couple of functions which could be helpful there!',
+          'Might get it at https://github.com/lucfra/ExperimentManager',
+          sep='\n', file=sys.stderr)
+
+
+def as_tuple_or_list(obj):
+    """
+    Make sure that `obj` is a tuple or a list and eventually converts it into a list with a single element
+
+    :param obj:
+    :return: A `tuple` or a `list`
+    """
+    return obj if isinstance(obj, (list, tuple)) else [obj]
 
 
 def flatten_list(lst):
@@ -18,9 +28,12 @@ def flatten_list(lst):
 
 
 def merge_dicts(*dicts):
+    """
+    Merges dictionaries recursively. Accepts also `None` and returns always a (possibly empty) dictionary
+    """
     from functools import reduce
     # if len(dicts) == 1: return dicts[0]
-    return reduce(lambda a, nd: merge_two_dicts(a, nd), dicts, {})
+    return reduce(lambda a, nd: merge_two_dicts(a, nd if nd else {}), dicts, {})
 
 
 def merge_two_dicts(x, y):
@@ -141,13 +154,17 @@ def maybe_eval(a, ss=None):
     return a
 
 
+def solve_int_or_generator(int_or_generator):
+    return range(int_or_generator) if isinteger(int_or_generator) else int_or_generator
+
+
 def remove_from_collection(key, *lst):
     """
     Remove tensors in lst from collection given by key
     """
     try:
         # noinspection PyProtectedMember
-        [tf.get_default_graph()._collections[key].remove(e) for e in lst]
+        [tf.get_default_graph()._collections[key].remove(_e) for _e in lst]
     except ValueError:
         print('WARNING: Collection -> {} <- does not contain some tensor in {}'.format(key, lst),
               file=sys.stderr)
@@ -165,60 +182,6 @@ def val_or_zero(a, b):
     return a if a is not None else tf.zeros_like(b)
     """
     return a if a is not None else tf.zeros_like(b)
-
-
-def cross_entropy_loss(labels, logits, linear_input=True, eps=1.e-5, name='cross_entropy_loss'):
-    """
-    Clipped standard-version cross entropy loss. Implemented because  the standard function
-    tf.nn.softmax_cross_entropy_with_logits has wrong (?) Hessian.
-    Clipped because it easily brings to nan otherwise, especially when calculating the Hessian.
-
-    Maybe the code could be optimized since ln(softmax(z_j)) = z_j - prod z_i . Should benchmark it.
-
-    :param labels:
-    :param logits: softmax or linear output of the model
-    :param linear_input: True (default) if y is linear in which case tf.nn.softmax will be applied to y
-    :param eps: (optional, default 1.e-5) clipping value for log.
-    :param name: (optional, default cross_entropy_loss) name scope for the defined operations.
-    :return: tensor for the cross_entropy_loss (WITHOUT MEAN ON THE EXAMPLES)
-    """
-    with tf.name_scope(name):
-        softmax_out = tf.nn.softmax(logits) if linear_input else logits
-        return -tf.reduce_sum(
-            labels * tf.log(tf.clip_by_value(softmax_out, eps, 1. - eps)), reduction_indices=[1]
-        )
-
-
-def binary_cross_entropy(labels, logits, linear_input=True, eps=1.e-5, name='binary_cross_entropy_loss'):
-    """
-    Same as cross_entropy_loss for the binary classification problem. the model should have a one dimensional output,
-    the targets should be given in form of a matrix of dimensions batch_size x 1 with values in [0,1].
-
-    :param labels:
-    :param logits: sigmoid or linear output of the model
-    :param linear_input: (default: True) is y is linear in which case tf.nn.sigmoid will be applied to y
-    :param eps: (optional, default 1.e-5) clipping value for log.
-    :param name: (optional, default binary_cross_entropy_loss) name scope for the defined operations.
-    :return: tensor for the cross_entropy_loss (WITHOUT MEAN ON THE EXAMPLES)
-    """
-    with tf.name_scope(name):
-        sigmoid_out = tf.nn.sigmoid(logits)[:, 0] if linear_input else logits
-        # tgs = targets if len(targets.)
-        return - (labels * tf.log(tf.clip_by_value(sigmoid_out, eps, 1. - eps)) +
-                  (1. - labels) * tf.log(tf.clip_by_value(1. - sigmoid_out, eps, 1. - eps)))
-
-
-# TODO put some other useful errors (with mean and so on) and scores, and add them to correct collections...
-def maybe_track_tensor(iter_op, tensor):
-    """
-    :return: a list of ops to run and a boolean that is true if tensor was actually a tensor to be tracked
-    """
-    to_be_run = iter_op
-    track_tensor = isinstance(tensor, tf.Tensor)
-    if track_tensor:  # in most cases this check should be fine
-        with tf.control_dependencies(flatten_list(iter_op)):  # be sure that tensor is computed AFTER the (optimization) iteration
-            to_be_run = [to_be_run, tf.identity(tensor)]
-    return to_be_run, track_tensor
 
 
 def isinteger(num):

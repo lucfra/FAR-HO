@@ -30,7 +30,7 @@ def inner_obj(var_list):
 
 io_lip = 1. + lmbd
 
-farho = far.HyperOptimizer(far.ReverseHg())
+farho = far.HyperOptimizer(far.ReverseHG())
 if run_gd:
     inner_obj = inner_obj([w, b])
     if right_step:

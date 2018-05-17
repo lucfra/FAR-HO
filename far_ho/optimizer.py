@@ -64,7 +64,11 @@ class OptimizerDict(object):
         """
         :return: A generator for the dynamics (state_variable_{k+1})
         """
-        return (d for (v, d) in self._dynamics)
+        return self._dynamics.values()
+
+    @property
+    def dynamics_dict(self):
+        return self._dynamics
 
     @property
     def state(self):
@@ -72,7 +76,7 @@ class OptimizerDict(object):
         :return: A generator for all the state variables (optimized variables and possibly auxiliary variables)
         being optimized
         """
-        return (v for (v, d) in self._dynamics)  # overridden in Adam
+        return self._dynamics.keys()  # overridden in Adam
 
     def _state_read(self):
         """
@@ -108,6 +112,7 @@ class OptimizerDict(object):
         return None if self._init_dyn is None else list(self._init_dyn.items())
 
     def __lt__(self, other):  # make OptimizerDict sortable
+        # TODO be sure that this is consistent
         assert isinstance(other, OptimizerDict)
         return hash(self) < hash(other)
 
@@ -141,11 +146,22 @@ class Optimizer(tf.train.Optimizer):
 class GradientDescentOptimizer(Optimizer, tf.train.GradientDescentOptimizer):
     def apply_gradients(self, grads_and_vars, global_step=None, name=None):
         ts = super(GradientDescentOptimizer, self).apply_gradients(grads_and_vars, global_step, name)
-        dynamics = []
+        dynamics = OrderedDict()
         for g, w in grads_and_vars:
             wk = w - tf.cast(self._learning_rate_tensor, g.dtype) * g
-            dynamics.append((w, wk))
+            dynamics[w] = wk
         return ts, dynamics
+
+    def __str__(self):
+        return '{}_lr{}'.format(self._name, self._learning_rate)
+
+    @property
+    def learning_rate(self):
+        return self._learning_rate
+
+    @property
+    def learning_rate_tensor(self):
+        return self._learning_rate_tensor
 
 
 class BacktrackingOptimizerDict(OptimizerDict):
@@ -164,12 +180,12 @@ class BacktrackingOptimizerDict(OptimizerDict):
 
         self.eta_k = tf.while_loop(self.armillo_cond, self.backtrack_body, [self.lr0])
 
-        self._dynamics = [(v, vk1(self.eta_k, v, g)) for v, g, vk1 in dynamics]
+        self._dynamics = OrderedDict([(v, vk1(self.eta_k, v, g)) for v, g, vk1 in dynamics])
 
     @property
     def ts(self):
         if self._ts is None:
-            self._ts = tf.group(*[v.assign(vk1) for v, vk1 in self._dynamics])
+            self._ts = tf.group(*[v.assign(vk1) for v, vk1 in self._dynamics.items()])
         return self._ts
 
     @property
@@ -195,19 +211,16 @@ class BackTrackingGradientDescentOptimizer(GradientDescentOptimizer):
         self.tau = tau
 
     def apply_gradients(self, grads_and_vars, global_step=None, name=None):
-        # ts = super(BackTrackingGradientDescentOptimizer, self).apply_gradients(grads_and_vars, global_step, name)
-        # self._learning_rate_t = tf.convert_to_tensor(self._learning_rate, dtype=grads_and_vars[0][1].)
         super(BackTrackingGradientDescentOptimizer, self)._prepare()
         with tf.name_scope(name, self.get_name()):
-            # dynamics = []
             m = 0.
-            dynamics = []
+            dynamics = OrderedDict()
 
             def _wk(_eta, _w, _g):
                 return _w - _eta * _g
 
             for g, w in grads_and_vars:
-                dynamics.append((w, g, _wk))
+                dynamics[w] = (g, _wk)
                 m -= utils.dot(g, g)
 
         return dynamics, m
@@ -244,14 +257,26 @@ class MomentumOptimizer(Optimizer, tf.train.MomentumOptimizer):
 
         # builds up the dynamics here
         mn = self.get_slot_names()[0]
-        dynamics = []
+        dynamics = OrderedDict()
         for g, w in grads_and_vars:
             m = self.get_slot(w, mn)
             mk = tf.cast(self._momentum_tensor, m.dtype) * m + g
             wk = w - tf.cast(self._learning_rate_tensor, mk.dtype) * mk
-            dynamics.extend([(w, wk), (m, mk)])
+            dynamics[w] = wk
+            dynamics[m] = mk
 
         return ts, dynamics
+
+    def __str__(self):
+        return '{}_lr{}_m{}'.format(self._name, self._learning_rate, self._momentum)
+
+    @property
+    def learning_rate(self):
+        return self._learning_rate
+
+    @property
+    def learning_rate_tensor(self):
+        return self._learning_rate_tensor
 
 
 # noinspection PyClassHasNoInit
@@ -264,10 +289,13 @@ class AdamOptimizer(Optimizer, tf.train.AdamOptimizer):
         ts = super(AdamOptimizer, self).apply_gradients(grads_and_vars, global_step, name)
 
         mn, vn = self.get_slot_names()
-        dynamics = []
+        dynamics = OrderedDict()
 
         with tf.name_scope(name, 'Adam_Dynamics'):
-            b1_pow, b2_pow = self._beta1_power, self._beta2_power
+            try:
+                b1_pow, b2_pow = self._beta1_power, self._beta2_power
+            except AttributeError:  # for newer versions of tensorflow..
+                b1_pow, b2_pow = self._get_beta_accumulators()
             lr_k = self._lr_t * tf.sqrt(1. - b2_pow) / (1. - b1_pow)
 
             lr_k = tf.cast(lr_k, grads_and_vars[0][0].dtype)
@@ -283,12 +311,27 @@ class AdamOptimizer(Optimizer, tf.train.AdamOptimizer):
 
                 wk = tf.subtract(w, lr_k * mk / (tf.sqrt(vk + self._epsilon_t ** 2)), name=w.op.name)
                 # IMPORTANT NOTE: epsilon should be outside sqrt as from the original implementation,
-                # but this brings to computational instability of the hypergradient.
+                # but this brings to numerical instability of the hypergradient.
 
-                dynamics.extend([(w, wk), (m, mk), (v, vk)])
+                dynamics[w] = wk
+                dynamics[m] = mk
+                dynamics[v] = vk
 
             b1_powk = b1_pow * self._beta1_t
             b2_powk = b2_pow * self._beta2_t
-            dynamics.extend([(b1_pow, b1_powk), (b2_pow, b2_powk)])
+
+            dynamics[b1_pow] = b1_powk
+            dynamics[b2_pow] = b2_powk
 
         return ts, dynamics
+
+    def __str__(self):
+        return '{}_lr{}_b1{}_b2{}_ep{}'.format(self._name, self._lr, self._beta1, self._beta2, self._epsilon)
+
+    @property
+    def learning_rate(self):
+        return self._lr
+
+    @property
+    def learning_rate_tensor(self):
+        return self._lr_t
