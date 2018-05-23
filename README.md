@@ -1,6 +1,6 @@
 # FAR-HO
 
-Gradient-based hyperparameter optimization package with [TensorFlow](https://www.tensorflow.org/)
+Gradient-based hyperparameter optimization package based on [TensorFlow](https://www.tensorflow.org/)
 
 This is the new package that implements the algorithms presented in the paper
  [_Forward and Reverse Gradient-Based Hyperparameter Optimization_](http://proceedings.mlr.press/v70/franceschi17a). For the older package see [RFHO](https://github.com/lucfra/RFHO). FAR-HO [features simplified interfaces, additional
