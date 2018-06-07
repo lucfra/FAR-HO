@@ -44,8 +44,10 @@ TensorFlow, thus making them readily applicable to deep learning systems. This o
 
 - [Self contained example](https://github.com/lucfra/FAR-HO/blob/master/far_ho/examples/Example_weighted_error(and_lr_and_w0).ipynb) on MNIST with `ReverseHG` for the optimization of initial starting point (inital weights), weights of each example and learning rate. 
 - _Coming soon_: expamples of application of online HO algorithms.
+- _Coming soon_: What you can and cannot do with this package.
 - [Hyper-representation](https://github.com/lucfra/FAR-HO/blob/master/far_ho/examples/hyper_representation.py) and related [notebook](https://github.com/lucfra/FAR-HO/blob/master/far_ho/examples/Hyper%20Representation_experiments.ipynb): an example in the context of learning-to-learn. In this case the hyperparameters are some of the weights of a convolutional neural network (plus the learning rate!). 
 The idea is to learn a cross-episode shared representation by explicitly minimizing the mean generalization error over meta-training tasks. See [A bridge between hyperparameter optimization and learning-to-Learn](https://arxiv.org/abs/1712.06283) presentied at [Workshop on meta-learning](http://metalearning.ml/). _Note_: for the moment, for running the code for this experiment you need to install the package https://github.com/lucfra/ExperimentManager for data management and statistics recording. 
+- See also [these experiment package](https://github.com/prolearner/hyper-representation)
 
 #### Core Steps
 
