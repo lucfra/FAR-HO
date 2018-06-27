@@ -8,5 +8,6 @@ setup(
     license='',
     author='Luca Franceschi',
     author_email='',
-    description='Forward And Reverse gradient-based hyperparameter optimization package for TensorFlow'
+    description='Forward And Reverse gradient-based hyperparameter optimization package for TensorFlow',
+    requires=['numpy']
 )
