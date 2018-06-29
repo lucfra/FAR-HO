@@ -2,6 +2,7 @@ from __future__ import absolute_import, print_function, division
 
 import tensorflow as tf
 import sys
+import numpy as np
 # noinspection PyUnresolvedReferences
 try:
     from experiment_manager.utils import *
