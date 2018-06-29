@@ -171,7 +171,7 @@ SAVER_EXP = em.Saver.std('L2BRIDGE', 'HYPER_REPR',
 
 
 def train(metasets, ex_name, hyper_repr_model_builder, classifier_builder=None, saver=None, seed=0, MBS=4,
-          available_devices=('/gpu:0', '/gpu:1'),
+          available_devices=('/gpu:0',),
           mlr0=.001, mlr_decay=1.e-5, T=4, n_episodes_testing=600,
           print_every=1000, patience=40, restore_model=False,
           lr=0.1, learn_lr=True, process_fn=None):
@@ -245,3 +245,14 @@ def train(metasets, ex_name, hyper_repr_model_builder, classifier_builder=None, 
             farho.run(T[0], trfd, vfd)  # one iteration of optimization of representation variables (hyperparameters)
 
     return saver, hyper_repr_model, exs
+
+
+if __name__ == '__main__':
+    CLASSES = 5
+    SHOTS = 1
+    META_BATCH_SIZE = 4
+    from far_ho.examples import load
+    omniglot = load.meta_omniglot(std_num_classes=CLASSES,
+                                  std_num_examples=(SHOTS*CLASSES, 15*CLASSES), rand=1)
+
+    res = train(omniglot, 'yen', omniglot_model, T=3, print_every=1000, MBS=META_BATCH_SIZE, n_episodes_testing=120)

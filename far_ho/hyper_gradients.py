@@ -334,7 +334,7 @@ class ReverseHG(HyperGradient):
 class ReverseHg(ReverseHG):
 
     def __init__(self, history=None):
-        print('Warning: refactored class name to ReverseHG', file=sys.stderr)
+        print('WARNING, DEPRECATED: please use the class ReverseHG', file=sys.stderr)
         super(ReverseHg, self).__init__(history)
 
 

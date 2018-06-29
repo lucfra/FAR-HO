@@ -21,46 +21,72 @@ except ImportError as e:
     em = experiment_manager_not_available('NOT ALL DATASETS AVAILABLE')
 
 
-
-
-def mnist(folder=None, one_hot=True, partitions=None, shuffle=False):
+def mnist(data_root_folder=None, one_hot=True, partitions=(0.8, .1,), shuffle=False):
     """
     Loads (download if necessary) Mnist dataset, and optionally splits it to form different training, validation
     and test sets (use partitions parameters for that)
-
-    :param folder:
-    :param one_hot:
-    :param partitions:
-    :param shuffle:
-    :return:
     """
-    datasets = read_data_sets(folder, one_hot=one_hot)
+    data_folder_name = 'mnist'
+
+    if data_root_folder is None:
+        data_root_folder = os.path.join(os.getcwd(), 'DATA')
+        if not os.path.exists(data_root_folder):
+            os.mkdir(data_root_folder)
+    data_folder = os.path.join(data_root_folder, data_folder_name)
+
+    datasets = read_data_sets(data_folder, one_hot=one_hot)
     train = Dataset(datasets.train.images, datasets.train.labels, name='MNIST')
     validation = Dataset(datasets.validation.images, datasets.validation.labels, name='MNIST')
     test = Dataset(datasets.test.images, datasets.test.labels, name='MNIST')
     res = [train, validation, test]
     if partitions:
         res = redivide_data(res, partition_proportions=partitions, shuffle=shuffle)
-        res += [None] * (3 - len(res))
     return Datasets.from_list(res)
 
 
-def meta_omniglot(folder=None, std_num_classes=None, std_num_examples=None,
+def meta_omniglot(data_root_folder=None, std_num_classes=None, std_num_examples=None,
                   one_hot_enc=True, rand=0, n_splits=None):
+    """
+    Loads, and downloads if necessary, Omniglot meta-dataset
+    """
+    data_folder_name = 'omniglot_resized'
+
     if em is None:
         return experiment_manager_not_available('meta_omniglot NOT AVAILABLE!')
 
-    if folder is None:
-        folder = os.path.join(os.getcwd(), 'DATA')
-        if not os.path.exists(folder):
-            os.mkdir(folder)
-    try:
-        return em.load.meta_omniglot(folder, std_num_classes=std_num_classes, std_num_examples=std_num_examples,
+    if data_root_folder is None:
+        data_root_folder = os.path.join(os.getcwd(), 'DATA')
+        if not os.path.exists(data_root_folder):
+            os.mkdir(data_root_folder)
+    data_folder = os.path.join(data_root_folder, data_folder_name)
+
+    if os.path.exists(data_folder):
+        print('DATA FOLDER IS:', data_folder)
+        print('LOADING META-DATASET')
+        return em.load.meta_omniglot(data_folder, std_num_classes=std_num_classes, std_num_examples=std_num_examples,
                                      one_hot_enc=one_hot_enc, _rand=rand, n_splits=n_splits)
-    except FileNotFoundError:
+    else:
         print('DOWNLOADING DATA')
 
-        package = Package('https://datahub.io/lucfra/omniglot_resized/datapackage.json')
+        package = datapackage.Package('https://datahub.io/lucfra/omniglot_resized/datapackage.json')
 
-        # print list of all resources:
-        print(package.resource_names)
+        with open('tmp_omniglot_resized.zip', 'wb') as f:
+            f.write(package.get_resource('omniglot_resized').raw_read())
+
+        import zipfile
+        zip_ref = zipfile.ZipFile('tmp_omniglot_resized.zip', 'r')
+        print('EXTRACTING DATA')
+        zip_ref.extractall(data_root_folder)
+        zip_ref.close()
+
+        os.remove('tmp_omniglot_resized.zip')
+
+        print('DONE')
+
+        # os.tmpfile()
+        return meta_omniglot(data_root_folder, std_num_classes, std_num_examples,
+                             one_hot_enc, rand, n_splits)
+
+
+if __name__ == '__main__':
+    print(meta_omniglot())

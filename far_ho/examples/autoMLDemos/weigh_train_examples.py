@@ -10,7 +10,7 @@ sess = tf.InteractiveSession()
 
 def get_data():
     # load a small portion of mnist data
-    datasets = far_ex.mnist(folder=os.path.join(os.getcwd(), 'MNIST_DATA'), partitions=(.1, .1,))
+    datasets = far_ex.mnist(data_root_folder=os.path.join(os.getcwd(), 'MNIST_DATA'), partitions=(.1, .1,))
     return datasets.train, datasets.validation
 
 
