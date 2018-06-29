@@ -7,6 +7,8 @@ import numpy as np
 from far_ho.examples.datasets import Dataset
 from far_ho.utils import merge_dicts
 
+import sys
+
 
 def get_data(d_set):
     if hasattr(d_set, 'images'):
@@ -87,3 +89,17 @@ def redivide_data(datasets, partition_proportions=None, shuffle=False):
 
     print('DONE')
     return new_datasets
+
+
+def experiment_manager_not_available(message=None):
+    if message: print(message, file=sys.stderr)
+    print('PLEASE INSTALL experiment_manager package', file=sys.stderr)
+    print('get it at https://github.com/lucfra/ExperimentManager', file=sys.stderr)
+    return None
+
+
+def datapackage_not_available(message=None):
+    if message: print(message, file=sys.stderr)
+    print('PLEASE INSTALL datapackage (see https://datahub.io)', file=sys.stderr)
+    print("execute 'pip install datapackage'", file=sys.stderr)
+    return None
