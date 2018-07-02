@@ -132,11 +132,14 @@ class HyperOptimizer(object):
         :param optim_dict: `OptimizerDict` obtained by calling minimize on an instance of `far.Optimizer`
         :param outer_objective_optimizer: Optimizer (may be tensorflow optimizer) for the hyperparameters
         :param hyper_list: optional list of hyperparameters
-        :param global_step: optional global step.
+        :param global_step: optional global step. By default tries to
+                                use the last variable in the collection GLOBAL_STEP
         :return: itself
         """
         hyper_list = self._hypergradient.compute_gradients(outer_objective, optim_dict, hyper_list=hyper_list)
         self._h_optim_dict[outer_objective_optimizer].update(hyper_list)
+        if global_step is None:
+            global_step = tf.get_collection(tf.GraphKeys.GLOBAL_STEP)[-1]
         self._global_step = global_step
         return self
 
