@@ -9,5 +9,5 @@ setup(
     author='Luca Franceschi',
     author_email='',
     description='Forward And Reverse gradient-based hyperparameter optimization package for TensorFlow',
-    requires=['numpy']
+    requires=['numpy', 'datapackage']
 )
