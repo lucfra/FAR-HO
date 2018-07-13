@@ -1,6 +1,6 @@
 from __future__ import absolute_import, print_function, division
 
-
+import sys
 import numpy as np
 from far_ho import utils
 
@@ -142,7 +142,7 @@ class Dataset:
         shape = self._shape(self.target)
         return 1 if len(shape) == 1 else maybe_cast_to_scalar(shape[1:])
 
-    def create_supplier(self, x, y, other_feeds=None, name=None):
+    def create_supplier(self, x, y, batch_size=None, other_feeds=None, name=None):
         """
         Return a standard feed dictionary for this dataset.
 
@@ -150,21 +150,118 @@ class Dataset:
                         when recording with rf.Saver)
         :param x: placeholder for data
         :param y: placeholder for target
+        :param batch_size: A size for the mini-batches. If None builds a supplier
+                            for the entire dataset
         :param other_feeds: optional other feeds (dictionary or None)
         :return: a callable.
         """
-        if not other_feeds: other_feeds = {}
+        if batch_size:
+            _supplier = SamplingWithoutReplacement(
+                self, batch_size).create_supplier(x, y, other_feeds)
+        else:
+            def _supplier(step=0):
+                return utils.merge_dicts({x: self.data, y: self.target},
+                                         utils.maybe_call(other_feeds, step))
 
-        # noinspection PyUnusedLocal
-        def _supplier(step=None):
-            """
-
-            :param step: unused, just for making it compatible with `HG` and `Saver`
-            :return: the feed dictionary
-            """
-            return utils.merge_dicts({x: self.data, y: self.target}, other_feeds)
-
-        if name:
-            NAMED_SUPPLIER[name] = _supplier
+            if name:
+                NAMED_SUPPLIER[name] = _supplier
 
         return _supplier
+
+
+class SamplingWithoutReplacement:
+    def __init__(self, dataset, batch_size, epochs=None):
+        """
+        Class for stochastic sampling of data points. It is most useful for feeding examples for the the
+        training ops of `ReverseHG` or `ForwardHG`. Most notably, if the number of epochs is specified,
+        the class takes track of the examples per mini-batches which is important for the backward pass
+        of `ReverseHG` method.
+
+        :param dataset: instance of `Dataset` class
+        :param batch_size:
+        :param epochs: number of epochs (can be None, in which case examples are
+                        fed continuously)
+        """
+        self.dataset = dataset
+        self.batch_size = batch_size
+        self.epochs = epochs
+        self.T = int(np.ceil(dataset.num_examples / batch_size))
+        if self.epochs: self.T *= self.epochs
+
+        self.training_schedule = None
+        self.iter_per_epoch = int(dataset.num_examples / batch_size)
+
+    def setting(self):
+        excluded = ['training_schedule', 'datasets']
+        dictionary = {k: v for k, v in vars(self).items() if k not in excluded}
+        if hasattr(self.dataset, 'setting'):
+            dictionary['dataset'] = self.dataset.setting()
+        return dictionary
+
+    def generate_visiting_scheme(self):
+        """
+        Generates and stores example visiting scheme, as a numpy array of integers.
+
+        :return: self
+        """
+
+        def all_indices_shuffled():
+            _res = list(range(self.dataset.num_examples))
+            np.random.shuffle(_res)
+            return _res
+
+        # noinspection PyUnusedLocal
+        _tmp_ts = np.concatenate([all_indices_shuffled()
+                                  for _ in range(self.epochs or 1)])
+        self.training_schedule = _tmp_ts if self.training_schedule is None else \
+            np.concatenate([self.training_schedule, _tmp_ts])  # do not discard previous schedule,
+        # this should allow backward passes of arbitrary length
+
+        return self
+
+    def create_supplier(self, x, y, other_feeds=None, name=None):
+        return self.create_feed_dict_supplier(x, y, *other_feeds, name=name)
+
+    def create_feed_dict_supplier(self, x, y, other_feeds=None, name=None):
+        """
+
+        :param name: optional name for this supplier
+        :param x: placeholder for independent variable
+        :param y: placeholder for dependent variable
+        :param other_feeds: dictionary of other feeds (e.g. dropout factor, ...) to add to the input output
+                            feed_dict
+        :return: a function that generates a feed_dict with the right signature for Reverse and Forward HyperGradient
+                    classes
+        """
+
+        def _training_supplier(step=0):
+
+            if step >= self.T:
+                if step % self.T == 0:
+                    if self.epochs:
+                        print('WARNING: End of the training scheme reached.'
+                              'Generating another scheme.', file=sys.stderr)
+                    self.generate_visiting_scheme()
+                step %= self.T
+
+            if self.training_schedule is None:
+                self.generate_visiting_scheme()
+
+            # noinspection PyTypeChecker
+            nb = self.training_schedule[step * self.batch_size: min(
+                (step + 1) * self.batch_size, len(self.training_schedule))]
+
+            bx = self.dataset.data[nb, :]
+            by = self.dataset.target[nb, :]
+
+            # if lambda_feeds:  # this was previous implementation... dunno for what it was used for
+            #     lambda_processed_feeds = {k: v(nb) for k, v in lambda_feeds.items()}  previous implementation...
+            #  looks like lambda was
+            # else:
+            #     lambda_processed_feeds = {}
+            return utils.merge_dicts({x: bx, y: by}, utils.maybe_call(other_feeds, step))
+
+        if name:
+            NAMED_SUPPLIER[name] = _training_supplier
+
+        return _training_supplier
