@@ -220,7 +220,7 @@ class SamplingWithoutReplacement:
         return self
 
     def create_supplier(self, x, y, other_feeds=None, name=None):
-        return self.create_feed_dict_supplier(x, y, *other_feeds, name=name)
+        return self.create_feed_dict_supplier(x, y, other_feeds=other_feeds, name=name)
 
     def create_feed_dict_supplier(self, x, y, other_feeds=None, name=None):
         """
