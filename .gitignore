@@ -1,7 +1,6 @@
 .idea/
 build/
 far_ho/examples/MNIST_DATA
-#far_ho/examples/.ipynb_checkpoints
-#tests/.ipynb_checkpoints
 .ipynb_checkpoints/
 far_ho/__pycache__/
+far_ho/examples/autoMLDemos/MNIST_DATA

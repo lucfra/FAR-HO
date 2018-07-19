@@ -1,24 +1,34 @@
 # FAR-HO
 
-Gradient-based hyperparameter optimization package based on [TensorFlow](https://www.tensorflow.org/)
+Gradient-based hyperparameter optimization and meta-learning package based on [TensorFlow](https://www.tensorflow.org/)
 
 This is the new package that implements the algorithms presented in the paper
  [_Forward and Reverse Gradient-Based Hyperparameter Optimization_](http://proceedings.mlr.press/v70/franceschi17a). For the older package see [RFHO](https://github.com/lucfra/RFHO). FAR-HO [features simplified interfaces, additional
 capabilities and a tighter integration with `tensorflow`](https://github.com/lucfra/FAR-HO#new-features-and-differences-from-rfho). 
 
-- Reverse-HG, generalization of algorithms presented in Domke [2012] and MacLaurin et Al. [2015] (without reversable dynamics and "reversable dtype")
-- Forward-HG
+- Reverse hypergradient (`ReverseHG`), generalization of algorithms presented in Domke [2012] and MacLaurin et Al. [2015] (without reversable dynamics and "reversable dtype")
+- Forward hypergradient (`ForwardHG`)
 - Online versions of the two previous algorithms: Real-Time HO (RTHO) and Truncated-Reverse HO (TRHO)
+- Implicit differentiation (`ImplicitHG`), can be used to implement HOAG algorithm [Pedregosa, 2016] by setting the 
+tolerance for solving the inner problem and computing the hypergradient as decreasing sequence 
+(default value is exponentially decreasing)
 
-The first two algorithms compute, with different procedures, the gradient
-  of a validation error with respect to the hyperparameters - i.e. the _hypergradient_ - while the last, based on Forward-HG, 
-  performs "real time" (i.e. at training time) hyperparameter updates.
+The algorithms algorithms compute, with different procedures, the (approximate) gradient
+  of an outer objective such as a validation error with respect 
+  to the outer variables (e.g. hyperparameters). 
+  We call the gradient of the outer objective _hypergradient_.
+  The "online" algorithms perform "real time" (i.e. at training time) 
+  outer variables updates, and are in general much faster then the "batch" versions,
+  incurring, however, in a certain bias.
   
 ![alt text](https://github.com/lucfra/RFHO/blob/master/rfho/examples/0_95_crop.png 
 "Response surface of a small neural network and optimization trajectory in the hyperparameter space.
 The arrows depicts the negative hypergradient at the current point, computed with Forward-HG algorithm.")
 
-These algorithms are useful also in a learning-to learn context where parameters of various _meta-learners_ effectively play the role of  hyperparamters, as explained here in the work [_A Bridge Between Hyperparameter Optimization and Learning-to-learn_](https://arxiv.org/abs/1712.06283).
+These algorithms are useful also in meta-learning where parameters of various _meta-learners_ effectively play the role 
+of  outer variables, as explained here in the workshop paper 
+[_A Bridge Between Hyperparameter Optimization and Learning-to-learn_](https://arxiv.org/abs/1712.06283).
+and [_Bilevel Programming for Hyperparameter Optimization and Meta-Learning_](http://proceedings.mlr.press/v80/franceschi18a/franceschi18a.pdf)
 
 ## Installation & Dependencies
 
@@ -30,14 +40,19 @@ cd FAR-HO
 python setup.py install
 ```
 
-Beside "usual" packages (`numpy`), FAR-HO is built upon `tensorflow`. Some examples depend on the package [`experimet_manager`](https://github.com/lucfra/ExperimentManager)
+Beside "usual" packages (`numpy`), FAR-HO is built upon `tensorflow`. 
+Some examples depend on the package [`experimet_manager`](https://github.com/lucfra/ExperimentManager)
+while automatic dataset download (Omniglot) requires `datapackage`.
 
 Please note that required packages will not be installed automatically.
 
 ## Overview
 
 Aim of this package is to implement and develop gradient-based hyperparameter optimization (HO) techniques in
-TensorFlow, thus making them readily applicable to deep learning systems. This optimization techniques find also natural applications in the field of [learning-to-learn](http://metalearning.ml/papers/metalearn17_franceschi.pdf). Feel free to issues comments, suggestions and feedbacks! You can email me at luca.franceschi@iit.it .
+TensorFlow, thus making them readily applicable to deep learning systems. 
+This optimization techniques find also natural applications in the field of meta-learning and
+learning-to-learn. 
+Feel free to issues comments, suggestions and feedbacks! You can email me at luca.franceschi@iit.it .
 
 
 #### Quick Start 
@@ -47,17 +62,26 @@ TensorFlow, thus making them readily applicable to deep learning systems. This o
 - _Coming soon_: What you can and cannot do with this package.
 - [Hyper-representation](https://github.com/lucfra/FAR-HO/blob/master/far_ho/examples/hyper_representation.py) and related [notebook](https://github.com/lucfra/FAR-HO/blob/master/far_ho/examples/Hyper%20Representation_experiments.ipynb): an example in the context of learning-to-learn. In this case the hyperparameters are some of the weights of a convolutional neural network (plus the learning rate!). 
 The idea is to learn a cross-episode shared representation by explicitly minimizing the mean generalization error over meta-training tasks. See [A bridge between hyperparameter optimization and learning-to-Learn](https://arxiv.org/abs/1712.06283) presentied at [Workshop on meta-learning](http://metalearning.ml/). _Note_: for the moment, for running the code for this experiment you need to install the package https://github.com/lucfra/ExperimentManager for data management and statistics recording. 
-- See also [these experiment package](https://github.com/prolearner/hyper-representation)
+- See also [this experiments package](https://github.com/prolearner/hyper-representation) for code for reproducing few-shot experiments 
+presented in ICML 2018 paper.
 
 #### Core Steps
 
-- Create a model as you prefer<sup>1</sup> with TensorFlow
+- Create a model<sup>1</sup> with TensorFlow
 - Create the hyperparameters you wish to optimize<sup>2</sup> with the function `get_hyperparameter` (which could be also variables of your model)
 - Define an inner objective (e.g. a training error) and an outer objective (e.g. a validation error) as scalar `tensorflow.Tensor`
 - Create an instance of `HyperOptimizer` after choosing an hyper-gradient computation algorithm among
-`ForwardHG` and `ReverseHG` (see next section)
-- Call the function `HyperOptimizer.minimize` specifying passing the outer and inner objectives, as well as an optimizer for the outer problem (which can be any optimizer form `tensorflow`) and an optimizer for the inner problem (which must be an optimizer contained in this package; at the moment gradient descent, gradient descent with momentum and Adam algorithms are available, but it is quite straightforward to implement other optimizers) 
-- Execute `HyperOptimizer.run(T, ...)` function inside a `tensorflow.Session`, optimize parameters and perform a step of optimization of hyperparameter optimization.
+`ForwardHG`, `ReverseHG` and `ImplicitHG` (see next section)
+- Call the function `HyperOptimizer.minimize` specifying passing the outer and inner objectives, 
+as well as an optimizer for the outer problem (which can be any optimizer form `tensorflow`) 
+and an optimizer for the inner problem (which must be an optimizer contained in this package; 
+at the moment gradient descent, gradient descent with momentum and Adam algorithms are available, 
+but it should be quite straightforward to implement other optimizers, email me if you're interested!) 
+- Execute `HyperOptimizer.run(T, ...)` function inside a `tensorflow.Session`, 
+optimize inner variables (parameters) and perform a step of optimization of outer variables (hyperparameter).
+
+The two scripts the folder [autoMLDemos](https://github.com/lucfra/FAR-HO/tree/master/far_ho/examples/autoMLDemos) 
+showcase typical usage of this package
 
 
 ```python

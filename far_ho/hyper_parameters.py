@@ -139,7 +139,8 @@ class HyperOptimizer(object):
         hyper_list = self._hypergradient.compute_gradients(outer_objective, optim_dict, hyper_list=hyper_list)
         self._h_optim_dict[outer_objective_optimizer].update(hyper_list)
         if global_step is None:
-            global_step = tf.get_collection(tf.GraphKeys.GLOBAL_STEP)[-1]
+            global_step = tf.get_collection(tf.GraphKeys.GLOBAL_STEP)[-1] if \
+                len(tf.get_collection(tf.GraphKeys.GLOBAL_STEP)) > 0 else None
         self._global_step = global_step
         return self
 
