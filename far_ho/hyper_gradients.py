@@ -1,10 +1,11 @@
 from __future__ import absolute_import, print_function, division
 
 import sys
-from collections import defaultdict
+from collections import defaultdict, deque
 
 import tensorflow as tf
 from tensorflow.python.training import slot_creator
+from tensorflow.contrib.opt import ScipyOptimizerInterface
 
 from far_ho import utils
 from far_ho.optimizer import OptimizerDict
@@ -167,11 +168,23 @@ class HyperGradient(object):
 
 
 class ReverseHG(HyperGradient):
+
     def __init__(self, history=None, name='ReverseHG'):
         super(ReverseHG, self).__init__(name)
         self._alpha_iter = tf.no_op()
         self._reverse_initializer = tf.no_op()
-        self._history = history or []
+        self._history = history if history is not None else []
+
+    @staticmethod
+    def _truncated(max_items, name='TruncatedReverseHG'):
+        """
+        Utility method to initialize truncated reverse HG (not necessarily online)
+
+        :param max_items: Maximum number of iterations that will be stored
+        :param name: a name for the operations and variables that will be created
+        :return: ReverseHG object
+        """
+        return ReverseHG(deque(maxlen=max_items + 1), name=name)
 
     # noinspection SpellCheckingInspection
     def compute_gradients(self, outer_objective, optimizer_dict, hyper_list=None):
@@ -290,8 +303,9 @@ class ReverseHG(HyperGradient):
             # nonlocal t  # with nonlocal would not be necessary the variable T... not compatible with 2.7
             _fd = utils.maybe_call(inner_objective_feed_dicts, t)
             self._save_history(ss.run(self.iteration, feed_dict=_fd))
-            utils.maybe_call(callback[0], t, _fd, ss)
             T = t
+
+            utils.maybe_call(callback[0], t, _fd, ss)  # callback
 
         # initialization of support variables (supports stochastic evaluation of outer objective via global_step ->
         # variable)
@@ -306,7 +320,9 @@ class ReverseHG(HyperGradient):
         reverse_init_fd = utils.merge_dicts(reverse_init_fd, maybe_init_fd)
         ss.run(self._reverse_initializer, feed_dict=reverse_init_fd)
 
-        for pt, state_feed_dict in self._state_feed_dict_generator(reversed(self._history[:-1]), T_or_generator[-1]):
+        del self._history[-1]  # do not consider last point
+
+        for pt, state_feed_dict in self._state_feed_dict_generator(reversed(self._history), T_or_generator[-1]):
             # this should be fine also for truncated reverse... but check again the index t
             t = T - pt - 1  # if T is int then len(self.history) is T + 1 and this numerator
             # shall start at T-1
@@ -336,14 +352,6 @@ class ReverseHg(ReverseHG):
     def __init__(self, history=None):
         print('WARNING, DEPRECATED: please use the class ReverseHG', file=sys.stderr)
         super(ReverseHg, self).__init__(history)
-
-
-class UnrolledReverseHG(HyperGradient):
-    def run(self, T_or_generator, inner_objective_feed_dicts=None, outer_objective_feed_dicts=None,
-            initializer_feed_dict=None, global_step=None, session=None, online=False, inner_objective=None):
-        return NotImplemented()
-
-        # maybe... it would require a certain effort...
 
 
 class ForwardHG(HyperGradient):
@@ -456,7 +464,7 @@ class ForwardHG(HyperGradient):
         for t in utils.solve_int_or_generator(T_or_generator):
             _fd = utils.maybe_call(inner_objective_feed_dicts, t)
             self._forward_step(ss, _fd)
-            utils.maybe_call(callback, _fd, ss)
+            utils.maybe_call(callback, t, _fd, ss)
 
     def _forward_step(self, ss, _fd):
         ss.run(self._z_iter, _fd)
@@ -485,3 +493,86 @@ class ForwardHG(HyperGradient):
             zs_values.append(ss.run(zs))  # these should not depend from any feed dictionary
 
         return zs_values, _callback
+
+
+class ImplicitHG(HyperGradient):
+    """
+    Implementation follows Pedregosa's algorithm HOAG
+    """
+
+    def __init__(self, linear_system_solver_gen=None, tolerance=None, name='ImplicitHG'):
+        super(ImplicitHG, self).__init__(name)
+        if linear_system_solver_gen is None:
+            linear_system_solver_gen = lambda _obj, var_list, _tolerance: ScipyOptimizerInterface(
+                _obj, var_list=var_list, options={'maxiter': 100}, method='cg', tol=_tolerance)
+        self.linear_system_solver = linear_system_solver_gen
+
+        if tolerance is None:
+            tolerance = lambda _k: 0.1 * (0.9 ** _k)
+        self.tolerance = tolerance
+
+        self._lin_sys = []
+        self._qs = []
+
+    def compute_gradients(self, outer_objective, optimizer_dict, hyper_list=None):
+        hyper_list = super(ImplicitHG, self).compute_gradients(outer_objective, optimizer_dict, hyper_list)
+        state = list(optimizer_dict.state)
+
+        with tf.variable_scope(outer_objective.op.name):
+            g1 = utils.vectorize_all(tf.gradients(outer_objective, state))
+            grads_inner_obj_vec = utils.vectorize_all(tf.gradients(optimizer_dict.objective, state))
+
+            q = self._create_q(g1)
+            obj = tf.norm(
+                utils.vectorize_all(tf.gradients(utils.dot(grads_inner_obj_vec, q), state)) - g1
+            )  # using the norm seems to produce better results then squared norm...
+            # (even though is more costly)
+
+            self._lin_sys.append(lambda _tolerance: self.linear_system_solver(obj, [q], _tolerance))
+
+            g2s = tf.gradients(outer_objective, hyper_list)
+            cross_ders = tf.gradients(utils.dot(grads_inner_obj_vec, q), hyper_list)
+            for g2, cd, hyper in zip(g2s, cross_ders, hyper_list):
+                assert g2 is not None or cd is not None, HyperGradient._ERROR_HYPER_DETACHED.format(hyper)
+                hg = utils.maybe_add(-cd, g2)
+                if hg is None:  # this would be strange...
+                    print('WARNING, outer objective is only directly dependent on hyperparameter {}. ' +
+                          'Direct optimization would be better!'.format(hyper))
+                    hg = g2
+                self._hypergrad_dictionary[hyper].append(hg)
+
+            return hyper_list
+
+    def _create_q(self, d_oo_d_state):
+        self._qs.append(slot_creator.create_zeros_slot(d_oo_d_state, 'q'))
+        return self._qs[-1]
+
+    def run(self, T_or_generator, inner_objective_feed_dicts=None, outer_objective_feed_dicts=None,
+            initializer_feed_dict=None, global_step=None, session=None, online=False, callback=None):
+        ss = session or tf.get_default_session()
+
+        inner_objective_feed_dicts = utils.as_tuple_or_list(inner_objective_feed_dicts)
+        if not online:
+            self._run_batch_initialization(ss, utils.maybe_call(
+                initializer_feed_dict, utils.maybe_eval(global_step, ss)))
+
+        for t in utils.solve_int_or_generator(T_or_generator):
+            _fd = utils.maybe_call(inner_objective_feed_dicts[0], t)
+            self._forward_step(ss, _fd)
+            utils.maybe_call(callback, t, _fd, ss)
+
+        # end of optimization. Solve linear systems.
+        tol_val = utils.maybe_call(self.tolerance, utils.maybe_eval(global_step, ss))  # decreasing tolerance (seq.)
+        # feed dictionaries (could...in theory, implement stochastic solution of this linear system...)
+        _fd = utils.maybe_call(inner_objective_feed_dicts[-1], -1)
+        _fd_outer = utils.maybe_call(outer_objective_feed_dicts, utils.maybe_eval(global_step, ss))
+        _fd = utils.merge_dicts(_fd, _fd_outer)
+
+        for lin_sys in self._lin_sys:
+            lin_sys(tol_val).minimize(ss, _fd)  # implicitly warm restarts with previously found q
+
+    def _forward_step(self, ss, _fd):
+        ss.run(self.iteration, _fd)
+
+    def _run_batch_initialization(self, ss, fd):
+        ss.run(self.initialization, feed_dict=fd)
