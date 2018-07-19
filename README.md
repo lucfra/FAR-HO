@@ -155,6 +155,7 @@ HO as a __constrained optimization__ problem. See the [paper](http://proceedings
 
 ### Citing 
 
+If you use this package please cite
 
 ```latex
 @InProceedings{franceschi2017forward,
@@ -170,7 +171,7 @@ HO as a __constrained optimization__ problem. See the [paper](http://proceedings
 }
 ```
 
-For works on learning-to-learn
+##### Works on meta-learning
 
 
 ```latex
