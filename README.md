@@ -30,6 +30,11 @@ of  outer variables, as explained here in the workshop paper
 [_A Bridge Between Hyperparameter Optimization and Learning-to-learn_](https://arxiv.org/abs/1712.06283).
 and [_Bilevel Programming for Hyperparameter Optimization and Meta-Learning_](http://proceedings.mlr.press/v80/franceschi18a/franceschi18a.pdf)
 
+The package is also described in the workshop paper 
+[_ Far-HO: A Bilevel Programming Package for Hyperparameter Optimization and Meta-Learning_]( https://arxiv.org/abs/1806.04941)
+presented at [AutoML 2018](https://sites.google.com/site/automl2018icml/) at ICML
+
+
 ## Installation & Dependencies
 
 Clone the repository and run setup script.
@@ -58,7 +63,8 @@ Feel free to issues comments, suggestions and feedbacks! You can email me at luc
 #### Quick Start 
 
 - [Self contained example](https://github.com/lucfra/FAR-HO/blob/master/far_ho/examples/Example_weighted_error(and_lr_and_w0).ipynb) on MNIST with `ReverseHG` for the optimization of initial starting point (inital weights), weights of each example and learning rate. 
-- _Coming soon_: expamples of application of online HO algorithms.
+- [IPython notebook](https://github.com/lucfra/FAR-HO/blob/master/far_ho/examples/autoMLDemos/Far-HO%20Demo%2C%20AutoML%202018%2C%20ICML%20workshop.ipynb)
+that showcase the usage of `ReverseHG`, `ForwardHG` and online `ForwardHG` (RTHO algorithm) in simple settings
 - _Coming soon_: What you can and cannot do with this package.
 - [Hyper-representation](https://github.com/lucfra/FAR-HO/blob/master/far_ho/examples/hyper_representation.py) and related [notebook](https://github.com/lucfra/FAR-HO/blob/master/far_ho/examples/Hyper%20Representation_experiments.ipynb): an example in the context of learning-to-learn. In this case the hyperparameters are some of the weights of a convolutional neural network (plus the learning rate!). 
 The idea is to learn a cross-episode shared representation by explicitly minimizing the mean generalization error over meta-training tasks. See [A bridge between hyperparameter optimization and learning-to-Learn](https://arxiv.org/abs/1712.06283) presentied at [Workshop on meta-learning](http://metalearning.ml/). _Note_: for the moment, for running the code for this experiment you need to install the package https://github.com/lucfra/ExperimentManager for data management and statistics recording. 
@@ -80,7 +86,7 @@ but it should be quite straightforward to implement other optimizers, email me i
 - Execute `HyperOptimizer.run(T, ...)` function inside a `tensorflow.Session`, 
 optimize inner variables (parameters) and perform a step of optimization of outer variables (hyperparameter).
 
-The two scripts the folder [autoMLDemos](https://github.com/lucfra/FAR-HO/tree/master/far_ho/examples/autoMLDemos) 
+Two scripts in the folder [autoMLDemos](https://github.com/lucfra/FAR-HO/tree/master/far_ho/examples/autoMLDemos) 
 showcase typical usage of this package
 
 
@@ -151,7 +157,7 @@ HO as a __constrained optimization__ problem. See the [paper](http://proceedings
 
 
 ```latex
-@InProceedings{pmlr-v70-franceschi17a,
+@InProceedings{franceschi2017forward,
   title = 	 {Forward and Reverse Gradient-Based Hyperparameter Optimization},
   author = 	 {Luca Franceschi and Michele Donini and Paolo Frasconi and Massimiliano Pontil},
   booktitle = 	 {Proceedings of the 34th International Conference on Machine Learning},
@@ -164,7 +170,20 @@ HO as a __constrained optimization__ problem. See the [paper](http://proceedings
 }
 ```
 
-For the work on learning-to-learn
+For works on learning-to-learn
+
+
+```latex
+@InProceedings{franceschi2018bilevel,
+  title = 	 {Bilevel Programming for Hyperparameter Optimization and Meta-learning},
+  author = 	 {Luca Franceschi and Paolo Frasconi and Saverio Salzo and Riccardo Grazzi and Massimiliano Pontil},
+  booktitle = 	 {Proceedings of the 35th International Conference on Machine Learning (ICML 2018},
+  year = 	 {2018},
+  series = 	 {Proceedings of Machine Learning Research},
+  publisher = 	 {PMLR},
+  pdf = 	 {http://proceedings.mlr.press/v80/franceschi18a/franceschi18a.pdf},
+}
+```
 
 
 ```latex
