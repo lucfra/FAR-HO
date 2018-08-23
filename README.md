@@ -9,17 +9,15 @@ capabilities and a tighter integration with `tensorflow`](https://github.com/luc
 - Reverse hypergradient (`ReverseHG`), generalization of algorithms presented in Domke [2012] and MacLaurin et Al. [2015] (without reversable dynamics and "reversable dtype")
 - Forward hypergradient (`ForwardHG`)
 - Online versions of the two previous algorithms: Real-Time HO (RTHO) and Truncated-Reverse HO (TRHO)
-- Implicit differentiation (`ImplicitHG`), can be used to implement HOAG algorithm [Pedregosa, 2016] by setting the 
-tolerance for solving the inner problem and computing the hypergradient as decreasing sequence 
-(default value is exponentially decreasing)
+- Implicit differentiation (`ImplicitHG`), which can be used to implement HOAG algorithm [Pedregosa, 2016] 
 
-The algorithms algorithms compute, with different procedures, the (approximate) gradient
+These algorithms algorithms compute, with different procedures, the (approximate) gradient
   of an outer objective such as a validation error with respect 
   to the outer variables (e.g. hyperparameters). 
   We call the gradient of the outer objective _hypergradient_.
   The "online" algorithms perform "real time" (i.e. at training time) 
-  outer variables updates, and are in general much faster then the "batch" versions,
-  incurring, however, in a certain bias.
+  outer variables updates, and are in general much faster then their "batch" version.
+  They may incur, however, in a certain bias.
   
 ![alt text](https://github.com/lucfra/RFHO/blob/master/rfho/examples/0_95_crop.png 
 "Response surface of a small neural network and optimization trajectory in the hyperparameter space.
@@ -30,7 +28,7 @@ of  outer variables, as explained here in the workshop paper
 [_A Bridge Between Hyperparameter Optimization and Learning-to-learn_](https://arxiv.org/abs/1712.06283).
 and [_Bilevel Programming for Hyperparameter Optimization and Meta-Learning_](http://proceedings.mlr.press/v80/franceschi18a/franceschi18a.pdf)
 
-The package is also described in the workshop paper 
+This package is also described in the workshop paper 
 [_ Far-HO: A Bilevel Programming Package for Hyperparameter Optimization and Meta-Learning_]( https://arxiv.org/abs/1806.04941)
 presented at [AutoML 2018](https://sites.google.com/site/automl2018icml/) at ICML
 
