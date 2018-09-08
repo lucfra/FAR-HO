@@ -7,6 +7,11 @@ from collections import OrderedDict
 
 from far_ho import utils
 
+GRADIENT_NONE_MESSAGE = 'WARNING: the gradient w.r.t.the tf.Variable\n {}\n is None;\n ' \
+                        'Check the computational graph of the inner objective, and be sure you\n' \
+                        'are not considering including variables that should not be there among the\n' \
+                        'inner variables.'
+
 
 class OptimizerDict(object):
     def __init__(self, ts, dynamics, objective):
@@ -160,6 +165,7 @@ class GradientDescentOptimizer(Optimizer, tf.train.GradientDescentOptimizer):
         ts = super(GradientDescentOptimizer, self).apply_gradients(grads_and_vars, global_step, name)
         dynamics = OrderedDict()
         for g, w in grads_and_vars:
+            assert g is not None, GRADIENT_NONE_MESSAGE.format(w)
             wk = w - tf.cast(self._learning_rate_tensor, g.dtype) * g
             dynamics[w] = wk
         return ts, dynamics
@@ -224,6 +230,8 @@ class BackTrackingGradientDescentOptimizer(GradientDescentOptimizer):
                 return _w - _eta * _g
 
             for g, w in grads_and_vars:
+                assert g is not None, GRADIENT_NONE_MESSAGE.format(w)
+
                 dynamics[w] = (g, _wk)
                 m -= utils.dot(g, g)
 
@@ -267,6 +275,8 @@ class MomentumOptimizer(Optimizer, tf.train.MomentumOptimizer):
         mn = self.get_slot_names()[0]
         dynamics = OrderedDict()
         for g, w in grads_and_vars:
+            assert g is not None, GRADIENT_NONE_MESSAGE.format(w)
+
             m = self.get_slot(w, mn)
             mk = tf.cast(self._momentum_tensor, m.dtype) * m + g
             wk = w - tf.cast(self._learning_rate_tensor, mk.dtype) * mk
@@ -308,6 +318,8 @@ class AdamOptimizer(Optimizer, tf.train.AdamOptimizer):
             self._epsilon_t = tf.cast(self._epsilon_t, grads_and_vars[0][0].dtype)
 
             for g, w in grads_and_vars:
+                assert g is not None, GRADIENT_NONE_MESSAGE.format(w)
+
                 m = self.get_slot(w, mn)
                 v = self.get_slot(w, vn)
                 mk = tf.add(self._beta1_t * m, (1. - self._beta1_t) * g, name=m.op.name)
