@@ -6,8 +6,14 @@ the need of re-initializing tensorflow session!
 """
 
 import tensorflow as tf
+from sys import stderr
 
-from experiment_manager import maybe_get
+try:
+    from experiment_manager import maybe_get
+except ModuleNotFoundError or ImportError as e:
+    maybe_get = None
+    print('models.py; WARNING: some functions may not work', file=stderr)
+    print(e, file=stderr)
 
 from tensorflow.python.client.session import register_session_run_conversion_functions
 
