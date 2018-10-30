@@ -20,7 +20,7 @@ from far_ho.optimizer import Optimizer
 from far_ho.hyper_gradients import ReverseHG, HyperGradient
 from far_ho.utils import GraphKeys
 
-HYPERPARAMETERS_COLLECTIONS = (GraphKeys.HYPERPARAMETERS, GraphKeys.GLOBAL_VARIABLES)
+HYPERPARAMETERS_COLLECTIONS = [GraphKeys.HYPERPARAMETERS, GraphKeys.GLOBAL_VARIABLES]
 
 
 # noinspection PyArgumentList,PyTypeChecker
@@ -43,7 +43,7 @@ def get_hyperparameter(name, initializer=None, shape=None, dtype=None, collectio
 
     :return: the newly created variable, or, if `scalar` is `True` a tensor composed by scalar variables.
     """
-    _coll = HYPERPARAMETERS_COLLECTIONS
+    _coll = list(HYPERPARAMETERS_COLLECTIONS)
     if collections:
         _coll += as_list(collections)
     if not scalar:
