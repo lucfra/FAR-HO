@@ -171,7 +171,7 @@ class GradientDescentOptimizer(Optimizer, tf.train.GradientDescentOptimizer):
         return ts, dynamics
 
     def __str__(self):
-        return '{}_lr{}'.format(self._name, self._learning_rate)
+        return '{}-lr={}'.format(self._name, self._learning_rate)
 
 
 class BacktrackingOptimizerDict(OptimizerDict):
@@ -286,7 +286,7 @@ class MomentumOptimizer(Optimizer, tf.train.MomentumOptimizer):
         return ts, dynamics
 
     def __str__(self):
-        return '{}_lr{}_m{}'.format(self._name, self._learning_rate, self._momentum)
+        return '{}-lr={}-m={}'.format(self._name, self._learning_rate, self._momentum)
 
     @property
     def optimizer_params_tensor(self):
@@ -342,7 +342,7 @@ class AdamOptimizer(Optimizer, tf.train.AdamOptimizer):
         return ts, dynamics
 
     def __str__(self):
-        return '{}_lr{}_b1{}_b2{}_ep{}'.format(self._name, self._lr, self._beta1, self._beta2, self._epsilon)
+        return '{}-lr={}-b1={}-b=2{}-ep={}'.format(self._name, self._lr, self._beta1, self._beta2, self._epsilon)
 
     @property
     def learning_rate(self):
