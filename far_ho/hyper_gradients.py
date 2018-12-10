@@ -294,11 +294,17 @@ class ReverseHG(HyperGradient):
         ss = session or tf.get_default_session()
 
         self._history.clear()
-        global_opt_step = 0
-        if online:
-            if global_step:
-                global_opt_step = global_step.eval()
-            else: print('WARNING, USING TRUNCATED REVERSE without setting a global step')
+
+        def _adjust_step(_t):
+            if online:
+                _T = utils.maybe_eval(global_step, ss)
+                if _T is None:
+                    _T = 0
+                    # print('WARNING, USING TRUNCATED REVERSE without setting a global step')
+                tot_t = utils.solve_int_or_generator(T_or_generator)
+                return _t + tot_t*_T
+            else: return _t
+
         if not online:
             _fd = utils.maybe_call(initializer_feed_dict, utils.maybe_eval(global_step, ss))
             self._save_history(ss.run(self.initialization, feed_dict=_fd))
@@ -310,11 +316,11 @@ class ReverseHG(HyperGradient):
         for t in utils.solve_int_or_generator(T_or_generator[0]):
             # nonlocal t  # with nonlocal would not be necessary the variable T... not compatible with 2.7
 
-            _fd = utils.maybe_call(inner_objective_feed_dicts, global_opt_step*t + t)
+            _fd = utils.maybe_call(inner_objective_feed_dicts, _adjust_step(t))
             self._save_history(ss.run(self.iteration, feed_dict=_fd))
             T = t
 
-            utils.maybe_call(callback[0], global_opt_step*t + t, _fd, ss)  # callback
+            utils.maybe_call(callback[0], _adjust_step(t), _fd, ss)  # callback
 
         # initialization of support variables (supports stochastic evaluation of outer objective via global_step ->
         # variable)
@@ -336,10 +342,9 @@ class ReverseHG(HyperGradient):
             t = T - pt - 1  # if T is int then len(self.history) is T + 1 and this numerator
             # shall start at T-1
             _fd = utils.merge_dicts(state_feed_dict, utils.maybe_call(inner_objective_feed_dicts,
-                                                                      global_opt_step*t + t))
+                                                                      _adjust_step(t)))
             ss.run(self._alpha_iter, _fd)
-            if len(callback) == 2: utils.maybe_call(callback[1],
-                                                    global_opt_step*t + t, _fd, ss)
+            if len(callback) == 2: utils.maybe_call(callback[1], _adjust_step(t), _fd, ss)
 
     def _save_history(self, weights):
         self._history.append(weights)
