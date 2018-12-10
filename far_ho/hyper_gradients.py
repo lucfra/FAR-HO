@@ -294,6 +294,11 @@ class ReverseHG(HyperGradient):
         ss = session or tf.get_default_session()
 
         self._history.clear()
+        global_opt_step = 0
+        if online:
+            if global_step:
+                global_opt_step = global_step.eval()
+            else: print('WARNING, USING TRUNCATED REVERSE without setting a global step')
         if not online:
             _fd = utils.maybe_call(initializer_feed_dict, utils.maybe_eval(global_step, ss))
             self._save_history(ss.run(self.initialization, feed_dict=_fd))
@@ -304,11 +309,12 @@ class ReverseHG(HyperGradient):
         T = 0  # this is useful if T_or_generator is indeed a generator...
         for t in utils.solve_int_or_generator(T_or_generator[0]):
             # nonlocal t  # with nonlocal would not be necessary the variable T... not compatible with 2.7
-            _fd = utils.maybe_call(inner_objective_feed_dicts, t)
+
+            _fd = utils.maybe_call(inner_objective_feed_dicts, global_opt_step*t + t)
             self._save_history(ss.run(self.iteration, feed_dict=_fd))
             T = t
 
-            utils.maybe_call(callback[0], t, _fd, ss)  # callback
+            utils.maybe_call(callback[0], global_opt_step*t + t, _fd, ss)  # callback
 
         # initialization of support variables (supports stochastic evaluation of outer objective via global_step ->
         # variable)
@@ -329,9 +335,11 @@ class ReverseHG(HyperGradient):
             # this should be fine also for truncated reverse... but check again the index t
             t = T - pt - 1  # if T is int then len(self.history) is T + 1 and this numerator
             # shall start at T-1
-            _fd = utils.merge_dicts(state_feed_dict, utils.maybe_call(inner_objective_feed_dicts, t))
+            _fd = utils.merge_dicts(state_feed_dict, utils.maybe_call(inner_objective_feed_dicts,
+                                                                      global_opt_step*t + t))
             ss.run(self._alpha_iter, _fd)
-            if len(callback) == 2: utils.maybe_call(callback[1], t, _fd, ss)
+            if len(callback) == 2: utils.maybe_call(callback[1],
+                                                    global_opt_step*t + t, _fd, ss)
 
     def _save_history(self, weights):
         self._history.append(weights)
