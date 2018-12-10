@@ -298,10 +298,13 @@ class ReverseHG(HyperGradient):
         def _adjust_step(_t):
             if online:
                 _T = utils.maybe_eval(global_step, ss)
+                print(_T)
                 if _T is None:
                     _T = 0
                     # print('WARNING, USING TRUNCATED REVERSE without setting a global step')
                 tot_t = utils.solve_int_or_generator(T_or_generator[0])
+                print(tot_t)
+                print(_t + tot_t*_T)
                 return int(_t + tot_t*_T)
             else: return _t
 
