@@ -217,7 +217,6 @@ class ReverseHG(HyperGradient):
             # TODO outer_objective might be a list... handle this case
 
             # iterative computation of hypergradients
-            doo_dypers = tf.gradients(outer_objective, hyper_list)  # (direct) derivative of outer objective w.r.t. hyp.
             alpha_dot_B = tf.gradients(lag_phi_t, hyper_list)
             # check that optimizer_dict has initial ops (phi_0)
             if optimizer_dict.init_dynamics is not None:
@@ -229,11 +228,11 @@ class ReverseHG(HyperGradient):
             # here, if some of this is None it may mean that the hyperparameter compares inside phi_0: check that and
             # if it is not the case raise error...
             hyper_grad_vars, hyper_grad_step = [], tf.no_op()
-            for dl_dh, doo_dh, a_d_b0, hyper in zip(alpha_dot_B, doo_dypers, alpha_dot_B0, hyper_list):
+            for dl_dh, a_d_b0, hyper in zip(alpha_dot_B, alpha_dot_B0, hyper_list):
                 assert dl_dh is not None or a_d_b0 is not None, HyperGradient._ERROR_HYPER_DETACHED.format(hyper)
                 hgv = None
                 if dl_dh is not None:  # "normal hyperparameter"
-                    hgv = self._create_hypergradient(hyper, doo_dh)
+                    hgv = self._create_hypergradient(outer_objective, hyper)
 
                     hyper_grad_step = tf.group(hyper_grad_step, hgv.assign_add(dl_dh))
                 if a_d_b0 is not None:
@@ -266,7 +265,7 @@ class ReverseHG(HyperGradient):
         return lag_mul
 
     @staticmethod
-    def _create_hypergradient(hyper, doo_dhypers):
+    def _create_hypergradient_from_dodh(hyper, doo_dhypers):
         """
         Creates one hyper-gradient as a variable. doo_dhypers:  initialization, that is the derivative of
         the outer objective w.r.t this hyper
@@ -274,6 +273,10 @@ class ReverseHG(HyperGradient):
         hgs = slot_creator.create_slot(hyper, utils.val_or_zero(doo_dhypers, hyper), 'hypergradient')
         utils.remove_from_collection(utils.GraphKeys.GLOBAL_VARIABLES, hgs)
         return hgs
+
+    @staticmethod
+    def _create_hypergradient(outer_obj, hyper):
+        return ReverseHG._create_hypergradient_from_dodh(hyper, tf.gradients(outer_obj, hyper)[0])
 
     def _state_feed_dict_generator(self, history, T_or_generator):
         for t, his in zip(utils.solve_int_or_generator(T_or_generator), history):
