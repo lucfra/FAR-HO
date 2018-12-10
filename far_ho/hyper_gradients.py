@@ -301,7 +301,7 @@ class ReverseHG(HyperGradient):
                 if _T is None:
                     _T = 0
                     # print('WARNING, USING TRUNCATED REVERSE without setting a global step')
-                tot_t = utils.solve_int_or_generator(T_or_generator)
+                tot_t = utils.solve_int_or_generator(T_or_generator[0])
                 return _t + tot_t*_T
             else: return _t
 
