@@ -56,6 +56,9 @@ def redivide_data(datasets, partition_proportions=None, shuffle=False):
             sum_proportions = sum(partition_proportions)
             assert sum_proportions <= 1, "partition proportions must sum up to at most one: %d" % sum_proportions
             if sum_proportions < 1.: partition_proportions += [1. - sum_proportions]
+        if isinstance(partition_proportions[0], int):
+            if sum(partition_proportions) < N:
+                partition_proportions += [N - sum(partition_proportions)]
     else:
         partition_proportions = [1. * get_data(d).shape[0] / N for d in datasets]
 
@@ -67,8 +70,9 @@ def redivide_data(datasets, partition_proportions=None, shuffle=False):
         all_labels = np.array(all_labels[permutation])
         all_infos = np.array(all_infos[permutation])
 
-    N = all_data.shape[0]
     assert N == all_labels.shape[0]
+
+
 
     print(partition_proportions)
     calculated_partitions = reduce(
