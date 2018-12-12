@@ -29,7 +29,7 @@ def get_targets(d_set):
         raise ValueError("something wrong with the dataset %s" % d_set)
 
 
-def redivide_data(datasets, partition_proportions=None, shuffle=False):
+def redivide_data(datasets, partition_proportions=None, shuffle=False, seed=None):
     """
     Function that redivides datasets. Can be use also to shuffle or filter or map examples.
 
@@ -42,6 +42,7 @@ def redivide_data(datasets, partition_proportions=None, shuffle=False):
     :param shuffle: (optional, default False) if True shuffles the examples
     :return: a list of datasets of length equal to the (possibly augmented) partition_proportion
     """
+    rnd = np.random.RandomState(seed)
     all_data = np.vstack([get_data(d) for d in datasets])
     all_labels = np.vstack([get_targets(d) for d in datasets])
 
@@ -64,7 +65,7 @@ def redivide_data(datasets, partition_proportions=None, shuffle=False):
 
     if shuffle:
         permutation = np.arange(all_data.shape[0])
-        np.random.shuffle(permutation)
+        rnd.shuffle(permutation)
 
         all_data = all_data[permutation]
         all_labels = np.array(all_labels[permutation])
