@@ -21,7 +21,7 @@ except ImportError as e:
     em = experiment_manager_not_available('NOT ALL DATASETS AVAILABLE')
 
 
-def mnist(data_root_folder=None, one_hot=True, partitions=(0.8, .1,), shuffle=False):
+def mnist(data_root_folder=None, one_hot=True, partitions=(0.8, .1,), shuffle=False, seed=None):
     """
     Loads (download if necessary) Mnist dataset, and optionally splits it to form different training, validation
     and test sets (use partitions parameters for that)
@@ -40,7 +40,7 @@ def mnist(data_root_folder=None, one_hot=True, partitions=(0.8, .1,), shuffle=Fa
     test = Dataset(datasets.test.images, datasets.test.labels, name='MNIST')
     res = [train, validation, test]
     if partitions:
-        res = redivide_data(res, partition_proportions=partitions, shuffle=shuffle)
+        res = redivide_data(res, partition_proportions=partitions, shuffle=shuffle, seed=seed)
     return Datasets.from_list(res)
 
 
