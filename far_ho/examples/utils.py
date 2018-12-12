@@ -70,6 +70,7 @@ def redivide_data(datasets, partition_proportions=None, shuffle=False):
     N = all_data.shape[0]
     assert N == all_labels.shape[0]
 
+    print(partition_proportions)
     calculated_partitions = reduce(
         lambda v1, v2: v1 + [v1[-1] + v2],
         [int(prp if isinstance(prp, int) else N * prp) for prp in partition_proportions],
