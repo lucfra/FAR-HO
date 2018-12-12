@@ -52,9 +52,10 @@ def redivide_data(datasets, partition_proportions=None, shuffle=False):
     if partition_proportions:  # argument check
         partition_proportions = list([partition_proportions] if isinstance(partition_proportions, float)
                                      else partition_proportions)
-        sum_proportions = sum(partition_proportions)
-        assert sum_proportions <= 1, "partition proportions must sum up to at most one: %d" % sum_proportions
-        if sum_proportions < 1.: partition_proportions += [1. - sum_proportions]
+        if isinstance(partition_proportions[0], float):
+            sum_proportions = sum(partition_proportions)
+            assert sum_proportions <= 1, "partition proportions must sum up to at most one: %d" % sum_proportions
+            if sum_proportions < 1.: partition_proportions += [1. - sum_proportions]
     else:
         partition_proportions = [1. * get_data(d).shape[0] / N for d in datasets]
 
@@ -71,7 +72,7 @@ def redivide_data(datasets, partition_proportions=None, shuffle=False):
 
     calculated_partitions = reduce(
         lambda v1, v2: v1 + [v1[-1] + v2],
-        [int(N * prp) for prp in partition_proportions],
+        [int(prp if isinstance(prp, int) else N * prp) for prp in partition_proportions],
         [0]
     )
     calculated_partitions[-1] = N
