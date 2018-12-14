@@ -6,19 +6,22 @@ This is the new package that implements the algorithms presented in the paper
  [_Forward and Reverse Gradient-Based Hyperparameter Optimization_](http://proceedings.mlr.press/v70/franceschi17a). For the older package see [RFHO](https://github.com/lucfra/RFHO). FAR-HO [features simplified interfaces, additional
 capabilities and a tighter integration with `tensorflow`](https://github.com/lucfra/FAR-HO#new-features-and-differences-from-rfho). 
 
-- Reverse hypergradient (`ReverseHG`), generalization of algorithms presented in Domke [2012] and MacLaurin et Al. [2015] (without reversable dynamics and "reversable dtype")
+- Reverse hypergradient (`ReverseHG`), generalization of algorithms presented in Domke [2012] and MacLaurin et Al. [2015] (without reversable dynamics and "reversable dtype"); including the "truncated reverse version" `ReverseHG.truncated`, see [_Truncated Back-propagation for Bilevel Optimization_](https://arxiv.org/abs/1810.10667)
 - Forward hypergradient (`ForwardHG`)
 - Online versions of the two previous algorithms: Real-Time HO (RTHO) and Truncated-Reverse HO (TRHO)
-- Implicit differentiation (`ImplicitHG`), which can be used to implement HOAG algorithm [Pedregosa, 2016] 
+- Implicit differentiation (`ImplicitHG`), which can be used to implement [HOAG algorithm](http://proceedings.mlr.press/v48/pedregosa16) [Pedregosa, 2016] 
 
 These algorithms algorithms compute, with different procedures, the (approximate) gradient
   of an outer objective such as a validation error with respect 
   to the outer variables (e.g. hyperparameters). 
   We call the gradient of the outer objective _hypergradient_.
-  The "online" algorithms perform "real time" (i.e. at training time) 
-  outer variables updates, and are in general much faster then their "batch" version.
-  They may incur, however, in a certain bias.
-  
+  The "online" algorithms may perform several updates of the 
+  outer variables before reaching the final iteration, and are in general are much faster then their "batch" version. This procedure is linked to warm restart for solving the inner optimizaiton problem, but the hypergradient is, in general, biased.
+
+**IMPORTANT NOTE:** This is not a plug-and-play hyperparameter optimizaiton package, but rather a research package that collects some useful methods that aim at simplifying the creation of experiments in gradient-based hyperparameter optimizaiton and related areas. With respect to other HPO packages, here a more specific problem structure is required. Furthermore, depending on the specific problem, the performance may be somewhat sensiteve to algorithmic parameters. As an important example, the inner optimizaion dynamics *should not diverge* in order for the hypergradients to yield useful informations [ Troubleshooting section coming soon! ].  
+
+**NOTE II:** In Italian FARO means beacon or lighthouse (so... no "H", but the "H" in Italian is silent!) . 
+
 ![alt text](https://github.com/lucfra/RFHO/blob/master/rfho/examples/0_95_crop.png 
 "Response surface of a small neural network and optimization trajectory in the hyperparameter space.
 The arrows depicts the negative hypergradient at the current point, computed with Forward-HG algorithm.")
