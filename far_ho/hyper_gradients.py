@@ -176,15 +176,17 @@ class ReverseHG(HyperGradient):
         self._history = history if history is not None else []
 
     @staticmethod
-    def _truncated(max_items, name='TruncatedReverseHG'):
+    def truncated(reverse_iterations, name='TruncatedReverseHG'):
         """
-        Utility method to initialize truncated reverse HG (not necessarily online)
+        Utility method to initialize truncated reverse HG (not necessarily online),
+        see the paper Truncated Back-propagation for Bilevel Optimization:
+        https://arxiv.org/abs/1810.10667
 
-        :param max_items: Maximum number of iterations that will be stored
+        :param reverse_iterations: Maximum number of iterations that will be stored
         :param name: a name for the operations and variables that will be created
         :return: ReverseHG object
         """
-        return ReverseHG(deque(maxlen=max_items + 1), name=name)
+        return ReverseHG(deque(maxlen=reverse_iterations + 1), name=name)
 
     # noinspection SpellCheckingInspection
     def compute_gradients(self, outer_objective, optimizer_dict, hyper_list=None):

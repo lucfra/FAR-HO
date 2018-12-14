@@ -72,7 +72,7 @@ def get_hyperparameter(name, initializer=None, shape=None, dtype=None, collectio
 
 class HyperOptimizer(object):
     """
-    Wrapper for performing hyperparameter optimization
+    Wrapper for performing gradient-based hyperparameter optimization
     """
 
     def __init__(self, hypergradient=None):
@@ -100,7 +100,10 @@ class HyperOptimizer(object):
         :param minimize_kwargs: optional arguments to pass to `optimizer.minimize`
         :return: `OptimizerDict` from optimizer.
         """
-        assert isinstance(inner_objective_optimizer, Optimizer)
+        assert isinstance(inner_objective_optimizer, Optimizer), 'Must use an optimizer that extends ' \
+                                                                 'the class far_ho.optimizer.Optimizer' \
+                                                                 'found {} instead' \
+                                                                 ''.format(type(inner_objective_optimizer))
         optim_dict = inner_objective_optimizer.minimize(
             inner_objective,
             var_list=var_list,
@@ -197,8 +200,6 @@ class HyperOptimizer(object):
     def _hyperit(self):
         """
         iteration of minimization of outer objective(s), assuming the hyper-gradients are already computed.
-
-        :return: an operation
         """
         assert self._fin_hts is not None, 'Must call HyperOptimizer.finalize before performing optimization.'
         return self._fin_hts
