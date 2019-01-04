@@ -158,6 +158,10 @@ class Optimizer(tf.train.Optimizer):
     def optimizer_params_tensor(self):
         return [self.learning_rate_tensor]
 
+    @staticmethod
+    def tf():
+        return tf.train.Optimizer
+
 
 # noinspection PyClassHasNoInit,PyAbstractClass
 class GradientDescentOptimizer(Optimizer, tf.train.GradientDescentOptimizer):
@@ -172,6 +176,10 @@ class GradientDescentOptimizer(Optimizer, tf.train.GradientDescentOptimizer):
 
     def __str__(self):
         return '{}-lr={}'.format(self._name, self._learning_rate)
+
+    @staticmethod
+    def tf():
+        return tf.train.GradientDescentOptimizer
 
 
 class BacktrackingOptimizerDict(OptimizerDict):
@@ -259,6 +267,10 @@ class BackTrackingGradientDescentOptimizer(GradientDescentOptimizer):
     def optimizer_params_tensor(self):
         return []
 
+    @staticmethod
+    def tf():
+        return None
+
 
 class MomentumOptimizer(Optimizer, tf.train.MomentumOptimizer):
     def __init__(self, learning_rate, momentum, use_locking=False, name="Momentum",
@@ -291,6 +303,10 @@ class MomentumOptimizer(Optimizer, tf.train.MomentumOptimizer):
     @property
     def optimizer_params_tensor(self):
         return super(MomentumOptimizer, self).optimizer_params_tensor + [self._momentum_tensor]
+
+    @staticmethod
+    def tf():
+        return tf.train.MomentumOptimizer
 
 
 # noinspection PyClassHasNoInit
@@ -355,3 +371,7 @@ class AdamOptimizer(Optimizer, tf.train.AdamOptimizer):
     @property
     def optimizer_params_tensor(self):
         return super(AdamOptimizer, self).optimizer_params_tensor + [self._beta1_t, self._beta2_t]
+
+    @staticmethod
+    def tf():
+        return tf.train.AdamOptimizer
