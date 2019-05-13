@@ -5,11 +5,11 @@ import sys
 import tensorflow as tf
 
 # noinspection PyUnresolvedReferences
-# try:
-#     from experiment_manager.utils import *
-# except ImportError as err:
-#     print('Warning: Experiment manager not loaded (https://github.com/lucfra/ExperimentManager)')
-#     print(err)
+try:
+    from experiment_manager.utils import *
+except ImportError as err:
+    print('Warning: ExperimentManager package not loaded (https://github.com/lucfra/ExperimentManager)')
+    print(err)
 
 
 def as_tuple_or_list(obj):
