@@ -8,7 +8,7 @@ import tensorflow as tf
 try:
     from experiment_manager.utils import *
 except ImportError as err:
-    print('Warning: Experiment manager not loaded (https://github.com/lucfra/ExperimentManager)')
+    print('Warning: ExperimentManager package not loaded (https://github.com/lucfra/ExperimentManager)')
     print(err)
 
 
