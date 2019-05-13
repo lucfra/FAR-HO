@@ -1,16 +1,15 @@
 from __future__ import absolute_import, print_function, division
 
-import tensorflow as tf
 import sys
-import numpy as np
+
+import tensorflow as tf
+
 # noinspection PyUnresolvedReferences
 try:
     from experiment_manager.utils import *
 except ImportError as err:
-    print('Warning:', err,
-          'This is not a required package! However, there might be a couple of functions which could be helpful there!',
-          'Might get it at https://github.com/lucfra/ExperimentManager',
-          sep='\n', file=sys.stderr)
+    print('Warning: Experiment manager not loaded (https://github.com/lucfra/ExperimentManager)')
+    print(err)
 
 
 def as_tuple_or_list(obj):
