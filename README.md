@@ -196,3 +196,5 @@ If you use this package please cite
   year={2017}
 }
 ```
+
+This package has been used for the project [LDS-GNN](https://github.com/lucfra/LDS-GNN): the code for the ICML 2019 paper ["Learning Discrete Structures for Graph Neural Networks"](https://arxiv.org/abs/1903.11960).
