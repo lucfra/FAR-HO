@@ -142,7 +142,7 @@ class Dataset:
         shape = self._shape(self.target)
         return 1 if len(shape) == 1 else maybe_cast_to_scalar(shape[1:])
 
-    def create_supplier(self, x, y, batch_size=None, other_feeds=None, name=None):
+    def create_supplier(self, x, y, batch_size=None, other_feeds=None, name=None, seed=None):
         """
         Return a standard feed dictionary for this dataset.
 
@@ -157,7 +157,7 @@ class Dataset:
         """
         if batch_size:
             _supplier = SamplingWithoutReplacement(
-                self, batch_size).create_supplier(x, y, other_feeds)
+                self, batch_size, seed=seed).create_supplier(x, y, other_feeds)
         else:
             def _supplier(step=0):
                 return utils.merge_dicts({x: self.data, y: self.target},
@@ -170,7 +170,7 @@ class Dataset:
 
 
 class SamplingWithoutReplacement:
-    def __init__(self, dataset, batch_size, epochs=None):
+    def __init__(self, dataset, batch_size, epochs=None, seed=None):
         """
         Class for stochastic sampling of data points. It is most useful for feeding examples for the the
         training ops of `ReverseHG` or `ForwardHG`. Most notably, if the number of epochs is specified,
@@ -185,6 +185,8 @@ class SamplingWithoutReplacement:
         self.dataset = dataset
         self.batch_size = batch_size
         self.epochs = epochs
+        self.seed = seed
+        self.rng = np.random.RandomState(self.seed) if self.seed is not None else np.random
         self.T = int(np.ceil(dataset.num_examples / batch_size))
         if self.epochs: self.T *= self.epochs
 
@@ -207,7 +209,7 @@ class SamplingWithoutReplacement:
 
         def all_indices_shuffled():
             _res = list(range(self.dataset.num_examples))
-            np.random.shuffle(_res)
+            self.rng.shuffle(_res)
             return _res
 
         # noinspection PyUnusedLocal
