@@ -475,8 +475,12 @@ class ForwardHG(HyperGradient):
 
         ss = session or tf.get_default_session()
 
-        if not online:
+        if online == False:
             self._run_batch_initialization(ss, utils.maybe_call(
+                initializer_feed_dict, utils.maybe_eval(global_step, ss)))
+
+        elif online == 'wr':
+            self._run_wr_initialization(ss, utils.maybe_call(
                 initializer_feed_dict, utils.maybe_eval(global_step, ss)))
 
         for t in utils.solve_int_or_generator(T_or_generator):
@@ -490,6 +494,10 @@ class ForwardHG(HyperGradient):
 
     def _run_batch_initialization(self, ss, fd):
         ss.run(self.initialization, feed_dict=fd)
+        ss.run(self._forward_initializer, feed_dict=fd)
+
+    def _run_wr_initialization(self, ss, fd):
+        # ss.run(self.initialization, feed_dict=fd)
         ss.run(self._forward_initializer, feed_dict=fd)
 
     @staticmethod
