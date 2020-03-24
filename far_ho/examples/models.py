@@ -11,7 +11,8 @@ from sys import stderr
 try:
     from experiment_manager import maybe_get
 except ModuleNotFoundError or ImportError as e:
-    maybe_get = None
+    def maybe_get(obj, i):
+        return obj[i] if hasattr(obj, '__getitem__') else obj
     print('models.py; WARNING: some functions may not work', file=stderr)
     print(e, file=stderr)
 

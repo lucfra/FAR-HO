@@ -3,6 +3,7 @@ from __future__ import absolute_import, print_function, division
 import sys
 
 import tensorflow as tf
+import numpy as np
 
 # noinspection PyUnresolvedReferences
 try:
