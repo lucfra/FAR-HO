@@ -10,6 +10,10 @@ from far_ho.utils import merge_dicts
 import sys
 
 
+def test():
+    print(1)
+
+
 def get_data(d_set):
     if hasattr(d_set, 'images'):
         data = d_set.images
